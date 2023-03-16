@@ -1237,7 +1237,7 @@ void runRandomTest() {
 #endif // defined(USE_I2C)
 
 void setup() {
-  Serial.begin(115200);
+  Serial.begin(230400);
   while(!Serial) /* wait */;
 
   #if defined(USE_I2C)

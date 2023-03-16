@@ -20,17 +20,7 @@
 #include "Crc.h"
 #include "BaseProtocol.h"
 
-static int configuredAddress = 0;
-
-static int handleGeneralCall(uint8_t *data, uint8_t len, uint8_t /* maxLen */) {
-	if (len == 1 && data[0] == GeneralCallCommands::RESET) {
-		resetSystem();
-	} else if (len == 1 && data[0] == GeneralCallCommands::RESET_ADDRESS) {
-		BusResetDeviceAddress();
-		configuredAddress = 0;
-	}
-	return 0;
-}
+uint8_t configuredAddress = INITIAL_ADDRESS;
 
 cmd_result handleCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dataout, uint8_t maxLen) {
 	if (maxLen < 5)
@@ -51,9 +41,8 @@ cmd_result handleCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dat
 			if (datain[1] != 0 && datain[1] != INFO_HW_TYPE)
 				return cmd_result(Status::NO_REPLY);
 
-			BusSetDeviceAddress(datain[0]);
 			configuredAddress = datain[0];
-			return cmd_ok();
+			return cmd_result(Status::NO_REPLY);
 		case ProtocolCommands::GET_MAX_PACKET_LENGTH:
 			dataout[0] = MAX_PACKET_LENGTH >> 8;
 			dataout[1] = MAX_PACKET_LENGTH & 0xFF;
@@ -63,97 +52,41 @@ cmd_result handleCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dat
 	}
 }
 
-// The bus implementation will already have checked whether the request
-// is addressed to us, this just checks whether child select maybe
-// prevents a response.
-bool shouldRespondToAddress(uint8_t address) {
-	#if defined(USE_CHILD_SELECT)
-	// Child select does not apply to general call or the configured
-	// address, and the pin is active low.
-	return address == 0 || address == configuredAddress || !CHILD_SELECT_PIN.read();
-	#else
-	(void)address; // unused
-	return true;
-	#endif
-}
 
-#if defined(USE_I2C)
-	int BusCallback(uint8_t address, uint8_t *data, uint8_t len, uint8_t maxLen) {
-		if (!shouldRespondToAddress(address))
+int BusCallback(uint8_t address, uint8_t *data, uint8_t len, uint8_t maxLen) {
+
+	// Check that there is at least room for an address, status, length and CRC
+	if (maxLen < 5)
+		return 0;
+
+	cmd_result res(0);
+	// Check we received at least command and crc
+	if (len < 3) {
+		res = cmd_result(Status::INVALID_TRANSFER);
+	} else {
+		uint16_t crc = Crc16Ibm().update(address).update(data, len - 2).get();
+		if (crc != (data[len - 2] | data[len - 1] << 8)) {
+			// Invalid CRC, so no reply (we cannot
+			// be sure that the message was really
+			// for us, some someone else might also
+			// reply).
 			return 0;
-
-		if (address == 0)
-			return handleGeneralCall(data, len, maxLen);
-
-		// Check that there is at least room for a status, length and a CRC
-		if (maxLen < 3)
-			return 0;
-
-		cmd_result res(0);
-		// Check we received at least command and crc
-		if (len < 2) {
-			res = cmd_result(Status::INVALID_TRANSFER);
 		} else {
-			uint8_t crc = Crc8Ccitt().update(data, len).get();
-			if (crc != 0) {
-				res = cmd_result(Status::INVALID_CRC);
-			} else {
-				// CRC checks out, process a command
-				res = handleCommand(data[0], data + 1, len - 2, data + 2, maxLen - 3);
-				if (res.status == Status::NO_REPLY)
-					return 0;
-			}
-		}
-
-		data[0] = res.status;
-		data[1] = res.len;
-		len = res.len + 2;
-
-		uint8_t crc = Crc8Ccitt().update(data, len).get();
-		data[len++] = crc;
-
-		return len;
-	}
-#elif defined(USE_RS485)
-	int BusCallback(uint8_t address, uint8_t *data, uint8_t len, uint8_t maxLen) {
-		if (!shouldRespondToAddress(address))
-			return 0;
-
-		// Check that there is at least room for an address, status, length and CRC
-		if (maxLen < 5)
-			return 0;
-
-		cmd_result res(0);
-		// Check we received at least command and crc
-		if (len < 3) {
-			res = cmd_result(Status::INVALID_TRANSFER);
-		} else {
-			uint16_t crc = Crc16Ibm().update(address).update(data, len - 2).get();
-			if (crc != (data[len - 2] | data[len - 1] << 8)) {
-				// Invalid CRC, so no reply (we cannot
-				// be sure that the message was really
-				// for us, some someone else might also
-				// reply).
+			// CRC checks out, process a command
+			res = handleCommand(data[0], data + 1, len - 3, data + 3, maxLen - 5);
+			if (res.status == Status::NO_REPLY)
 				return 0;
-			} else if (address == 0) {
-				return handleGeneralCall(data, len - 2, maxLen);
-			} else {
-				// CRC checks out, process a command
-				res = handleCommand(data[0], data + 1, len - 3, data + 3, maxLen - 5);
-				if (res.status == Status::NO_REPLY)
-					return 0;
-			}
 		}
-
-		data[0] = address;
-		data[1] = res.status;
-		data[2] = res.len;
-		len = res.len + 3;
-
-		uint16_t crc = Crc16Ibm().update(data, len).get();
-		data[len++] = crc;
-		data[len++] = crc >> 8;
-
-		return len;
 	}
-#endif
+
+	data[0] = address;
+	data[1] = res.status;
+	data[2] = res.len;
+	len = res.len + 3;
+
+	uint16_t crc = Crc16Ibm().update(data, len).get();
+	data[len++] = crc;
+	data[len++] = crc >> 8;
+
+	return len;
+}

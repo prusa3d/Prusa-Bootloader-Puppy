@@ -21,34 +21,20 @@
 #include <stdint.h>
 #include <Gpio.h>
 
-#if defined(BOARD_TYPE_interfaceboard)
-	const Pin PIN_3V3_ENABLE = {&PORTA, &PINA, &DDRA, &PUEA, 1 << PA2};
-	const Pin PIN_BOOST_ENABLE = {&PORTA, &PINA, &DDRA, &PUEA, 1 << PA3};
-	const Pin PIN_DISPLAY_RESET = {&PORTB, &PINA, &DDRB, &PUEB, 1 << PB0};
-
-	const uint8_t INFO_HW_TYPE = 1;
-	const uint8_t DISPLAY_CONTROLLER_TYPE = 1;
-        const uint16_t MAX_PACKET_LENGTH = 32;
-	#define HAVE_DISPLAY
-	#define NEED_TRAMPOLINE
-#elif defined(BOARD_TYPE_gphopper)
-	const uint8_t INFO_HW_TYPE = 2;
-        const uint16_t MAX_PACKET_LENGTH = 255;
-        constexpr const Pin CHILDREN_SELECT_PINS[] = {
-            {RCC_GPIOB, GPIOB, GPIO8},
-        };
-        const Pin CHILD_SELECT_PIN = {RCC_GPIOB, GPIOB, GPIO9};
-	#define USE_CHILD_SELECT
+#if defined(BOARD_TYPE_prusa_dwarf)
+	const uint8_t INFO_HW_TYPE = 42;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+	const uint8_t INITIAL_ADDRESS = 0x00;
+    #define SYSTEM_CORE_CLOCK 64000000
+    #define NEEDS_ADDRESS_CHANGE 1
+#elif defined(BOARD_TYPE_prusa_modular_bed)
+	const uint8_t INFO_HW_TYPE = 43;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+	const uint8_t INITIAL_ADDRESS = 0x00;
+    #define SYSTEM_CORE_CLOCK 64000000
+    #define NEEDS_ADDRESS_CHANGE 0
 #else
 	#error "No board type defined"
 #endif
-
-#if defined(USE_CHILD_SELECT)
-const uint8_t NUM_CHILDREN = sizeof(CHILDREN_SELECT_PINS) / sizeof(*CHILDREN_SELECT_PINS);
-#endif
-
-// By default, listen to addresses 8-15
-const uint8_t INITIAL_ADDRESS = 0x08;
-const uint8_t INITIAL_BITS = 4;
 
 #endif /* CONFIG_H_ */

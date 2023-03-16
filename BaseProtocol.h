@@ -32,17 +32,6 @@ struct Status {
 	static const uint8_t NO_REPLY              = 0xff;
 };
 
-struct GeneralCallCommands {
-	#if defined(USE_I2C)
-		static const uint8_t RESET = 0x06;
-		static const uint8_t RESET_ADDRESS = 0x04;
-	#elif defined(USE_RS485)
-		// These add 0x40 to the I2C general call commands so they en up
-		// in the 0x40-0x48 "user defined function codes" area.
-		static const uint8_t RESET = 0x46;
-		static const uint8_t RESET_ADDRESS = 0x44;
-	#endif
-};
 
 // Commands typically also supported by application firmware
 struct ProtocolCommands {
@@ -63,3 +52,9 @@ inline cmd_result cmd_ok(uint8_t len = 0) {
 
 cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dataout, uint8_t maxLen);
 void resetSystem();
+
+inline uint8_t getConfiguredAddress()
+{
+	extern uint8_t configuredAddress;
+	return configuredAddress;
+}

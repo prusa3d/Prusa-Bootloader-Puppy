@@ -23,10 +23,15 @@
 
 static_assert(MAX_PACKET_LENGTH >= 32, "Protocol requires at least 32-byte packets");
 
-void BusUpdate();
-void BusInit(uint8_t initialAddress, uint8_t initialBits = 7);
+/**
+ * @brief Pool UART, read and write messages.
+ * @return true if busy, false if idle
+ */
+bool BusUpdate();
+void BusInit();
 void BusDeinit();
 void BusSetDeviceAddress(uint8_t address);
+uint8_t BusGetDeviceAddress();
 void BusResetDeviceAddress();
 
 int BusCallback(uint8_t address, uint8_t *buffer, uint8_t len, uint8_t maxLen);

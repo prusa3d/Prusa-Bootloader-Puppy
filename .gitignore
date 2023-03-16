@@ -84,3 +84,8 @@ $RECYCLE.BIN/
 
 Debug
 Release
+
+.ccls-cache
+
+bootloader-*.bin
+generated.STM32G0*.ld

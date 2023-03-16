@@ -16,14 +16,9 @@
  */
 
 #include <string.h>
-#if defined(__AVR__)
-#include <avr/io.h>
-#include <avr/boot.h>
-#include <avr/pgmspace.h>
-#include <util/delay.h>
-#elif defined(STM32)
 #include <libopencm3/stm32/desig.h>
-#endif
+#include <libopencm3/stm32/iwdg.h>
+#include <libopencm3/stm32/flash.h>
 #include <stdio.h>
 
 #include "Config.h"
@@ -31,51 +26,74 @@
 #include "BaseProtocol.h"
 #include "SelfProgram.h"
 #include "bootloader.h"
+#include "led.hpp"
+#include "crash_dump_shared.hpp"
+#include "Gpio.h"
 
-// Make boot_signature_byte_get work on ATtiny841, until this is merged:
-// https://savannah.nongnu.org/patch/index.php?9437
-#if !defined(SIGRD) && defined(RSIG)
-#define SIGRD RSIG
-#endif
 
 struct Commands {
 	// See also ProtocolCommands in BaseProtocol.h
-	static const uint8_t POWER_UP_DISPLAY      = 0x02;
 	static const uint8_t GET_HARDWARE_INFO     = 0x03;
-	static const uint8_t GET_SERIAL_NUMBER     = 0x04;
 	static const uint8_t START_APPLICATION     = 0x05;
 	static const uint8_t WRITE_FLASH           = 0x06;
 	static const uint8_t FINALIZE_FLASH        = 0x07;
 	static const uint8_t READ_FLASH            = 0x08;
-	static const uint8_t GET_HARDWARE_REVISION = 0x09;
-	static const uint8_t GET_NUM_CHILDREN      = 0x0a;
-	static const uint8_t SET_CHILD_SELECT      = 0x0b;
-	static const uint8_t GET_EXTRA_INFO        = 0x0d;
+	static const uint8_t GET_FINGERPRINT       = 0x0e;
+	static const uint8_t COMPUTE_FINGERPRINT   = 0x0f;
+	static const uint8_t READ_OTP              = 0x10;
+
+	// These were removed and should not be used
+	static const uint8_t RESERVED_02 = 0x02; ///< POWER_UP_DISPLAY     
+	static const uint8_t RESERVED_04 = 0x04; ///< GET_SERIAL_NUMBER
+	static const uint8_t RESERVED_09 = 0x09; ///< GET_HARDWARE_REVISION
+	static const uint8_t RESERVED_0a = 0x0a; ///< GET_NUM_CHILDREN     
+	static const uint8_t RESERVED_0b = 0x0b; ///< SET_CHILD_SELECT     
+	static const uint8_t RESERVED_0d = 0x0d; ///< GET_EXTRA_INFO       
+	static const uint8_t RESERVED_46 = 0x46; ///< RESET
+	static const uint8_t RESERVED_44 = 0x44; ///< RESET_ADDRESS
+};
+
+struct VersionInfoInFlash {
+    uint8_t hw_compatible_version; uint8_t hw_revision; uint8_t hw_type; uint32_t bl_version;
 };
 
 // Put version info into flash, so applications can read this to
 // determine the hardware version. The linker puts this at a fixed
 // position at the end of flash.
-constexpr const uint8_t version_info[] __attribute__((__section__(".version"), __used__)) = {
+constexpr const struct VersionInfoInFlash version_info __attribute__((__section__(".version"), __used__)) = {
 	HARDWARE_COMPATIBLE_REVISION,
 	HARDWARE_REVISION,
 	INFO_HW_TYPE,
 	BL_VERSION,
 };
 
-constexpr const uint8_t MAX_EXTRA_INFO = 16;
+struct __attribute__((packed)) ApplicationStartupArguments {
+    uint8_t modbus_address;
+};
+
+struct ApplicationStartupArguments application_startup_arguments __attribute__((__section__(".app_args"), __used__)) = {
+    .modbus_address = 0xFF,
+};
+
+// OTP area
+static constexpr uint32_t OTP_START_ADDR = 0x1FFF7000UL;
+static constexpr uint32_t OTP_SIZE = 1024;
 
 // Check that the version info size used by the linker (which must be
 // hardcoded...) is correct.
 static_assert(sizeof(version_info) == VERSION_SIZE, "Version section has wrong size?");
 
-volatile bool bootloaderExit = false;
+// Exit the bootloader
+// Either check the internal unsalted fingerprint
+// or get salt and fingerprint from buddy
+volatile bool bootloaderExit = false;	///< Exit with check of the internal fingerprint
+volatile bool bootloaderFingerprintMatch = false;	///< True if fingerprint was checked by buddy
 
 // Note that we must buffer a full erase page size (not smaller), since
 // we must know at the start of an erase page whether any byte in the
 // entire page is changed to decide whether or not to erase.
 static uint8_t writeBuffer[FLASH_ERASE_SIZE];
-static uint16_t nextWriteAddress = 0;
+static uint32_t nextWriteAddress = 0;
 
 // Helper function that is declared but not defined, to allow
 // semi-static assertions (where input to a check is not really const,
@@ -84,7 +102,10 @@ static uint16_t nextWriteAddress = 0;
 // error).
 void compiletime_check_failed();
 
-static bool equalToFlash(uint16_t address, uint16_t len) {
+// Disable compile-time check (doesn't work on gcc 7 without LTO)
+void compiletime_check_failed() {}
+
+static bool equalToFlash(uint32_t address, uint16_t len) {
 	uint16_t offset = 0;
 	while (len > 0) {
 		if (writeBuffer[offset] != SelfProgram::readByte(address + offset))
@@ -96,7 +117,7 @@ static bool equalToFlash(uint16_t address, uint16_t len) {
 }
 
 
-static uint8_t commitToFlash(uint16_t address, uint16_t len) {
+static uint8_t commitToFlash(uint32_t address, uint16_t len) {
 	// If nothing needs to be changed, then don't
 	if (equalToFlash(address, len))
 		return 0;
@@ -113,7 +134,7 @@ static uint8_t commitToFlash(uint16_t address, uint16_t len) {
 	return 0;
 }
 
-static cmd_result handleWriteFlash(uint16_t address, uint8_t *data, uint16_t len, uint8_t *dataout) {
+static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len, uint8_t *dataout) {
 	if (address == 0)
 		nextWriteAddress = 0;
 
@@ -139,129 +160,131 @@ static cmd_result handleWriteFlash(uint16_t address, uint8_t *data, uint16_t len
 	return cmd_ok();
 }
 
-#ifdef HAVE_DISPLAY
-void displayOn() {
-	// This pin has a pullup to 3v3, so the display comes out of
-	// reset as soon as the 3v3 is powered up. To prevent that, pull
-	// it low now.
-	PIN_DISPLAY_RESET.write(0);
+/**
+ * @brief Get revision from datamatrix from OTP.
+ * @return revision number (only VV field of datamatrix, no factorify ID)
+ */
+uint8_t get_revision() {
+	uint8_t otp_v = *(uint8_t*)(OTP_START_ADDR);
+	if (otp_v != 5)	{ // This understands only OTP v5
+		return 0;
+	}
 
-	// Reset sequence for the display according to datasheet: Enable
-	// 3v3 logic supply, then release the reset, then powerup the
-	// boost converter for LED power. This is a lot slower than
-	// possible according to the datasheet.
-	PIN_3V3_ENABLE.write(1);
+	char *datamatrix = (char*)(OTP_START_ADDR + 8);
+	if ((datamatrix[4] != '-')                            // Separator between factorify product ID and revision
+		|| (datamatrix[5] < '0') || (datamatrix[5] > '9') // Revision is two decimal digits
+		|| (datamatrix[6] < '0') || (datamatrix[6] > '9')) {
+		return 0;
+	}
 
-        _delay_ms(1);
-	// Switch to input to let external 3v3 pullup work instead of
-	// making it high (which would be 5v);
-	PIN_DISPLAY_RESET.hiz();
-
-        _delay_ms(1);
-	PIN_BOOST_ENABLE.write(1);
-
-        _delay_ms(5);
+	return (datamatrix[5] - '0') * 10 + (datamatrix[6] - '0');
 }
-#endif
+
+/**
+ * @brief Read FLASH or read OTP.
+ * @param cmd either Commands::READ_FLASH or Commands::READ_OTP
+ * @param datain input data
+ * @param len number of bytes in datain
+ * @param dataout response output data
+ * @param maxLen max number of bytes in dataout
+ * @return command result, possibly with number of used bytes in dataout
+ */
+cmd_result readMemory(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dataout, uint8_t maxLen) {
+	if (len != 4+1)
+		return cmd_result(Status::INVALID_ARGUMENTS);
+
+	uint32_t address = datain[0] << 24 | datain[1] << 16 | datain[2] << 8 | datain[3];
+	uint8_t readlen = datain[4];
+	uint32_t memOffset;
+	uint32_t memSize;
+
+	if (cmd == Commands::READ_FLASH) {
+		memSize = APPLICATION_SIZE;
+		memOffset = FLASH_BASE + FLASH_APP_OFFSET;
+	} else {
+		memSize = OTP_SIZE;
+		memOffset = OTP_START_ADDR;
+	}
+
+	if ((readlen > maxLen) || ((address + readlen) > memSize)) {
+		return cmd_result(Status::INVALID_ARGUMENTS);
+	}
+
+	memcpy(dataout, (uint8_t*)(memOffset + address), readlen);
+	return cmd_ok(readlen);
+}
 
 cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dataout, uint8_t maxLen) {
 	if (maxLen < 5)
 		compiletime_check_failed();
 
 	switch (cmd) {
-		#ifdef HAVE_DISPLAY
-		case Commands::POWER_UP_DISPLAY:
-			displayOn();
-			dataout[0] = DISPLAY_CONTROLLER_TYPE;
-			return cmd_ok(1);
-		#endif
-
-		case Commands::GET_HARDWARE_INFO:
-		{
+		case Commands::GET_HARDWARE_INFO: {
 			if (len != 0)
 				return cmd_result(Status::INVALID_ARGUMENTS);
 
+			const size_t hw_info_size = 11;
+			if (maxLen < hw_info_size)
+				compiletime_check_failed();
+
+			// Type 42 dwarf or type 43 modular bed
+			static_assert(sizeof(INFO_HW_TYPE) == sizeof(uint8_t), "INFO_HW_TYPE won't fit to 1 byte!");
 			dataout[0] = INFO_HW_TYPE;
-			dataout[1] = HARDWARE_COMPATIBLE_REVISION;
-			dataout[2] = BL_VERSION;
-			// Available flash size is up to startApplication.
-			// Convert from words to bytes.
-			uint16_t size = SelfProgram::applicationSize;
-			dataout[3] = size >> 8;
-			dataout[4] = size;
-			return cmd_ok(5);
+
+			// Hardware revision
+			uint16_t hardware_revision = get_revision();
+			dataout[1] = hardware_revision >> 8;
+			dataout[2] = hardware_revision;
+
+			// Bootloader version as a commit counter, MSB
+			uint32_t bl_version = BL_VERSION;
+			dataout[3] = bl_version >> 24;
+			dataout[4] = bl_version >> 16;
+			dataout[5] = bl_version >> 8;
+			dataout[6] = bl_version;
+
+			// Available flash size is up to startApplication, MSB
+			uint32_t size = SelfProgram::applicationSize;
+			dataout[7] = size >> 24;
+			dataout[8] = size >> 16;
+			dataout[9] = size >> 8;
+			dataout[10] = size;
+
+			return cmd_ok(hw_info_size);
 		}
-		case Commands::GET_HARDWARE_REVISION:
-		{
-			if (len != 0)
-				return cmd_result(Status::INVALID_ARGUMENTS);
 
-			dataout[0] = HARDWARE_REVISION;
-			return cmd_ok(1);
-		}
-		case Commands::GET_SERIAL_NUMBER:
-		{
-			if (len != 0)
-				return cmd_result(Status::INVALID_ARGUMENTS);
-
-			#if defined(__AVR_ATtiny841__) || defined(__AVR_ATtiny441__)
-			// These are offsets into the device signature imprint table, which
-			// store the parts of the serial number (lot number, wafer number, x/y
-			// coordinates).
-			static const uint8_t PROGMEM serial_offset[] = {0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x17};
-
-			if (maxLen < sizeof(serial_offset))
-				compiletime_check_failed();
-
-			for (uint8_t i = 0; i < sizeof(serial_offset); ++i)
-				dataout[i] = boot_signature_byte_get(pgm_read_byte(&serial_offset[i]));
-			return cmd_ok(sizeof(serial_offset));
-			#elif defined(STM32)
-			const size_t id_size = 12;
-			if (maxLen < id_size)
-				compiletime_check_failed();
-
-			// This access the id bytes directly rather than
-			// using the desig_get_unique_id libopencm3
-			// function, in order to use byte addressing
-			// (word addressing requires dataout to be
-			// aligned) and so we can reverse the bytes
-			// (rather than the words) so the result has all
-			// bytes in big endian order.
-			// Note that that G030 does not document these
-			// bytes, but they seem to be available
-			// regardless (G030 seems to use the same core
-			// die as G031)
-			for (uint8_t i = 0; i < id_size; ++i)
-				dataout[i] = ((uint8_t*)DESIG_UNIQUE_ID_BASE)[id_size - i - 1];
-
-			return cmd_ok(id_size);
-			#else
-			return cmd_result(Status::COMMAND_NOT_SUPPORTED);
-			#endif
-		}
 		case Commands::START_APPLICATION:
-			if (len != 0)
-				return cmd_result(Status::INVALID_ARGUMENTS);
+			if (len == 0) { // No fingerprint, need to check internal fingerprint
+				bootloaderFingerprintMatch = false;
+				bootloaderExit = true;
+			} else if (len == (sizeof(SelfProgram::appFwFingerprintSalt) + sizeof(SelfProgram::appFwFingerprint))) { // Check with fingerprint that was already calculated
+				if (((static_cast<uint32_t>(datain[0]) << 24 | datain[1] << 16 | datain[2] << 8 | datain[3]) == SelfProgram::appFwFingerprintSalt)
+					&& (memcmp(SelfProgram::appFwFingerprint, &datain[4], sizeof(SelfProgram::appFwFingerprint)) == 0)) {
+					bootloaderFingerprintMatch = true;
+				}
 
-			bootloaderExit = true;
-			// This is probably never sent
-			return cmd_ok();
+				bootloaderExit = true;
+			} else {
+				return cmd_result(Status::INVALID_ARGUMENTS);
+			}
+
+			dataout[0] = bootloaderFingerprintMatch;  // Report if fingerprint calculation is skipped
+			return cmd_ok(1);
 
 		case Commands::WRITE_FLASH:
 		{
-			if (len < 2)
+			if (len < 4)
 				return cmd_result(Status::INVALID_ARGUMENTS);
 
-			uint16_t address = datain[0] << 8 | datain[1];
-			return handleWriteFlash(address, datain + 2, len - 2, dataout);
+			uint32_t address = datain[0] << 24 | datain[1] << 16 | datain[2] << 8 | datain[3];
+			return handleWriteFlash(address, datain + 4, len - 4, dataout);
 		}
 		case Commands::FINALIZE_FLASH:
 		{
 			if (len != 0)
 				return cmd_result(Status::INVALID_ARGUMENTS);
 
-			uint16_t pageAddress = nextWriteAddress & ~(sizeof(writeBuffer) - 1);
+			uint32_t pageAddress = nextWriteAddress & ~(sizeof(writeBuffer) - 1);
 			uint8_t err = commitToFlash(pageAddress, nextWriteAddress - pageAddress);
 			if (err) {
 				dataout[0] = err;
@@ -273,81 +296,160 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 			}
 		}
 		case Commands::READ_FLASH:
-		{
-			if (len != 3)
+		case Commands::READ_OTP:
+			return readMemory(cmd, datain, len, dataout, maxLen);
+
+		case Commands::GET_FINGERPRINT: {
+			uint8_t offset = 0;
+			uint8_t size = sizeof(SelfProgram::appFwFingerprint);
+			if (len == 2) {	// Buddy wants only a chunk of the fingerprint
+				offset = datain[0];
+				size = datain[1];
+				if ((offset + size) > sizeof(SelfProgram::appFwFingerprint)) {
+					return cmd_result(Status::INVALID_ARGUMENTS);
+				}
+			} else if (len != 0) {
 				return cmd_result(Status::INVALID_ARGUMENTS);
+			}
 
-			uint16_t address = datain[0] << 8 | datain[1];
-			uint8_t len = datain[2];
+			if (!SelfProgram::appFwFingerprintValid)
+				return cmd_result(Status::COMMAND_FAILED);
 
-			if (len > maxLen)
-				return cmd_result(Status::INVALID_ARGUMENTS);
+			memcpy(dataout, &SelfProgram::appFwFingerprint[offset], size);
 
-			SelfProgram::readFlash(address, dataout, len);
-			return cmd_ok(len);
+			return cmd_ok(size);
 		}
-		#if defined(USE_CHILD_SELECT)
-		case Commands::GET_NUM_CHILDREN:
-		{
-			if (len != 0)
+		case Commands::COMPUTE_FINGERPRINT: {
+			if (len != 4) {
 				return cmd_result(Status::INVALID_ARGUMENTS);
+			}
 
-			dataout[0] = NUM_CHILDREN;
-			return cmd_ok(1);
+			SelfProgram::appFwFingerprintSalt = datain[0] << 24 | datain[1] << 16 | datain[2] << 8 | datain[3];
+			
+			SelfProgram::calculateSaltedFingerprint(SelfProgram::appFwFingerprintSalt);
+			return cmd_ok();
 		}
-		case Commands::SET_CHILD_SELECT:
-		{
-			if (len != 2)
-				return cmd_result(Status::INVALID_ARGUMENTS);
-
-			uint8_t index = datain[0];
-			uint8_t state = datain[1];
-
-			if (index >= NUM_CHILDREN || state > 1)
-				return cmd_result(Status::INVALID_ARGUMENTS);
-
-			if (state)
-				CHILDREN_SELECT_PINS[index].write(0);
-			else
-				CHILDREN_SELECT_PINS[index].hiz();
-
-			return cmd_ok(0);
-		}
-		#endif // defined(USE_CHILD_SELECT)
-		#if defined(EXTRA_INFO)
-		case Commands::GET_EXTRA_INFO:
-		{
-			static constexpr const uint8_t info[] = {EXTRA_INFO};
-
-			if (len != 0)
-				return cmd_result(Status::INVALID_ARGUMENTS);
-
-			static_assert(sizeof(info) <= MAX_EXTRA_INFO, "More EXTRA_INFO than protocol allows");
-
-			if (sizeof(info) > maxLen)
-				compiletime_check_failed();
-
-			memcpy(dataout, info, sizeof(info));
-			return cmd_ok(sizeof(info));
-		}
-		#endif // defined(EXTRA_INFO)
 
 		default:
 			return cmd_result(Status::COMMAND_NOT_SUPPORTED);
 	}
 }
 
+
+#ifndef DISABLE_WATCHDOG /*Watchdog can be disabled by define in makefile*/
+
+/**
+ * @brief Start IWDG and configure watchdog time.
+ */
+static void watchdog_start() {
+	// Freeze IWDG on debug
+	#define DBGMCU_APB_FZ1               MMIO32(DBGMCU_BASE + 0x08) // Freeze register was not defined in opencm3
+	#define DBGMCU_APB_FZ1_DBG_IWDG_STOP 0x00001000                 // IWDG freeze bit in DBGMCU_APB_FZ1 register
+	rcc_periph_clock_enable(RCC_DBG);
+	DBGMCU_APB_FZ1 |= DBGMCU_APB_FZ1_DBG_IWDG_STOP; // Stop IWDG when core is halted by debugger
+	rcc_periph_clock_disable(RCC_DBG);
+
+	// Start and unlock IWDG
+	IWDG_KR = IWDG_KR_START;
+	IWDG_KR = IWDG_KR_UNLOCK;
+
+	// Configure IWDG
+	IWDG_PR = 0x6;     // Slowest, approx 32 kHz / 256 = 125 Hz
+	IWDG_RLR = 0xfff;  // Maximal, approx 2^12 / (~32 kHz / 256) = 32.768 s
+	IWDG_WINR = 0xfff; // Window disabled
+
+	// Cannot wait for IWDG update flags as buddy won't wait that long,
+	// handle it in watchdog_reset() instead
+}
+
+/**
+ * @brief Wait for the IWDG peripheral to finish configuration and reset IWDG.
+ */
+static void watchdog_reset() {
+	static bool started = false;
+	if (started) {
+		IWDG_KR = IWDG_KR_RESET; // Reset watchdog
+	} else if ((IWDG_SR & (IWDG_SR_WVU | IWDG_SR_RVU | IWDG_SR_PVU)) == 0x00u) {
+		started = true;
+	}
+}
+
+#else /*DISABLE_WATCHDOG*/
+	// Dummy symbols when watchdog is disabled
+	#define watchdog_start() do{}while(0)
+	#define watchdog_reset() do{}while(0)
+#endif /*DISABLE_WATCHDOG*/
+
+// Active wait until power panic signal is disabled
+void wait_for_end_of_power_panic() {
+	// TODO: Suspend CPU wake up by interrupt.
+#if defined(BOARD_TYPE_prusa_dwarf)
+		Pin power_panic = {RCC_GPIOA, GPIOA, GPIO11};
+#elif defined(BOARD_TYPE_prusa_modular_bed)
+		Pin power_panic = {RCC_GPIOC, GPIOC, GPIO11};
+#else
+	#error "Unknown board"
+#endif
+	power_panic.hiz();
+	// Power panic is active low, spin until it reads high
+	while(!power_panic.read()) {
+		watchdog_reset();
+	}
+}
+
+// Used to read the FW_DESCRIPTOR section persistent data, used attribute is to make sure it's not optimized away
+__attribute__((used)) const puppy_crash_dump::FWDescriptor * const fw_descriptor
+	= reinterpret_cast<puppy_crash_dump::FWDescriptor *>(puppy_crash_dump::APP_DESCRIPTOR_OFFSET + FLASH_APP_OFFSET + 0x08000000 );
+
 extern "C" {
 	void runBootloader() {
 		ClockInit();
-		BusInit(INITIAL_ADDRESS, INITIAL_BITS);
+		BusInit();
 
-		while (!bootloaderExit) {
+		// Configure watchdog
+		watchdog_start();
+		watchdog_reset();		
+
+		// Avoid doing anything as long as power panic is active
+		wait_for_end_of_power_panic();
+
+		led::set_rgb(0, 0, 0x0f); // blue: bl is running
+
+		// Turn on heatbreak fan to avoid heat spreading across heatbreak
+#if defined(BOARD_TYPE_prusa_dwarf)
+		rcc_periph_clock_enable(RCC_GPIOC);
+		gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO6);
+		gpio_set(GPIOC, GPIO6);
+#endif
+
+		bool busy = true;
+		while (busy || !bootloaderExit) {
 			#if !defined(BUS_USE_INTERRUPTS)
-			BusUpdate();
+			busy = BusUpdate();
 			#endif // defined(BUS_USE_INTERRUPTS)
+
+			watchdog_reset();
 		}
 
+                //Check with unsalted fingerprint if necessary
+		if (bootloaderFingerprintMatch == false) {
+			bootloaderFingerprintMatch = SelfProgram::checkUnsaltedFingerprint(fw_descriptor->fingerprint); // Calculate and check match with fingerprint in descriptors
+		}
+
+		if (fw_descriptor->stored_type == puppy_crash_dump::FWDescriptor::StoredType::crash_dump
+			|| !bootloaderFingerprintMatch
+#if NEEDS_ADDRESS_CHANGE
+			|| getConfiguredAddress() == INITIAL_ADDRESS
+#endif
+			){
+			while(true) {
+				led::set_rgb(0x0f, 0x08, 0x00); // orange: not safe to start
+				watchdog_reset();
+			}
+		}
+
+		led::set_rgb(0, 0x0f, 0x0f); // cyan: fw is about to start
+		application_startup_arguments.modbus_address = getConfiguredAddress();
 		BusDeinit();
 		ClockDeinit();
 	}

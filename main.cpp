@@ -31,40 +31,13 @@
 //  /cygdrive/c/Program\ Files\ \(x86\)/Atmel/Atmel\ Toolchain/AVR8\ GCC/Native/3.4.1061/avr8-gnu-toolchain/bin/avr-objdump.exe -d Release/bootloader-attiny.elf
 
 
-#if defined(__AVR__)
-#include <avr/io.h>
-#include <avr/wdt.h>
-#elif defined(STM32)
+
 #include <libopencm3/cm3/scb.h>
-#endif
+#include <libopencm3/stm32/g0/flash.h>
 #include "bootloader.h"
 #include "SelfProgram.h"
 #include <stdio.h>
 
-#if defined(__AVR_ATtiny841__) || defined(__AVR_ATtiny441__)
-// This is a single instruction placed immediately before the bootloader.
-// The application code will overwrite this instruction with a jump to to the start of the application.
-void __attribute__((noreturn)) __attribute__((noinline)) __attribute__((naked)) __attribute__((section(".boot_trampoline"))) startApplication();
-void startApplication() {
-	// When no application is flashed yet, this code is used. This
-	// just restarts the bootloader.
-	asm("rjmp __vectors");
-	__builtin_unreachable();
-}
-
-// Store the fuse bits in a separate section of the elf file.
-// Note that fuse bits are inverted (0 enables the feature) so we must bitwise
-// and the masks together.
-FUSES =
-{
-	// Internal 8Mhz, 6CK / 14CK+16ms startup time
-	.low = FUSE_SUT_CKSEL4 & FUSE_SUT_CKSEL3 & FUSE_SUT_CKSEL2 & FUSE_SUT_CKSEL0,
-	// Brown-out at 2.5-2.9V (8Mhz needs 2.4V or more)
-	.high = FUSE_SPIEN & FUSE_EESAVE & FUSE_BODLEVEL1,
-	// BOD always on
-	.extended = FUSE_SELFPRGEN & FUSE_BODACT0 & FUSE_BODPD0
-};
-#elif defined(STM32)
 
 #if !defined(FLASH_BASE)
 // https://github.com/libopencm3/libopencm3-examples/issues/224
@@ -79,6 +52,33 @@ extern "C" {
 	void mem_manage_handler() __attribute__((alias("hard_fault_handler")));
 	void bus_fault_handler() __attribute__((alias("hard_fault_handler")));
 	void usage_fault_handler() __attribute__((alias("hard_fault_handler")));
+
+	/**
+	 * @brief Non-Maskable Interrupt.
+	 * Usually means non-recoverable hardware error.
+	 */
+	void nmi_handler() {
+		// When there is an error in flash, ECC will trigger an NMI interrupt
+		uint32_t eccr = FLASH_ECCR;
+		FLASH_ECCR = eccr;            // Clear interrupt flags
+		if (eccr & FLASH_ECCR_ECCD) { // ECC detection that could not be corrected
+
+			// Get address of the error, starts by 0 without the 0x08000000 offset
+			uint32_t fault_address = ((eccr & FLASH_ECCR_ADDR_ECC_MASK) >> FLASH_ECCR_ADDR_ECC_SHIFT) * 8;
+			if (fault_address > FLASH_APP_OFFSET) // Error is in application space
+			{
+				flash_unlock();
+				flash_clear_status_flags();
+				flash_erase_page(fault_address / FLASH_ERASE_SIZE); // Erase the offending page
+				flash_lock();
+			} else // Error is in bootloader, no way to fix this
+			{
+				while (1);
+			}
+		}
+
+		scb_reset_system();
+	}
 }
 
 void startApplication() __attribute__((__noreturn__));
@@ -90,18 +90,10 @@ void startApplication() {
 	asm("msr msp, %0; bx %1;" : : "r"(top_of_stack), "r"(reset_vector));
 	__builtin_unreachable();
 }
-#else
-#error "Unsupported arch"
-#endif
 
 extern void uart_init();
 
 int main() {
-	#if defined(__AVR__)
-	// Disable watchdog, to prevent it triggering again
-	MCUSR &= ~(1 << WDRF);
-	wdt_disable();
-	#endif // defined(__AVR__)
 
 	#if defined(NEED_TRAMPOLINE)
 	// Set this value here, to avoid gcc generating a lot of

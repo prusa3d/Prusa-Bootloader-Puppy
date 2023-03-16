@@ -1,0 +1,37 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Dwarf Debug",
+            "cwd": "${workspaceRoot}/",
+            "executable": "${workspaceRoot}/bootloader-debug-prusa_dwarf-1.0.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "configFiles": ["${workspaceRoot}/.vscode/launch_debug.cfg"],
+            "toolchainPrefix": "arm-none-eabi",
+            "windows": {
+                "armToolchainPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin"
+            },
+            "linux": {
+                "armToolchainPath": "/usr/bin"
+            },
+        },
+        {
+            "name": "ModularBed Debug",
+            "cwd": "${workspaceRoot}/",
+            "executable": "${workspaceRoot}/bootloader-debug-prusa_modular_bed-1.0.elf",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "openocd",
+            "configFiles": ["${workspaceRoot}/.vscode/launch_debug.cfg"],
+            "toolchainPrefix": "arm-none-eabi",
+            "windows": {
+                "armToolchainPath": "C:/Program Files (x86)/GNU Arm Embedded Toolchain/10 2021.10/bin"
+            },
+            "linux": {
+                "armToolchainPath": "/usr/bin"
+            },
+        },
+    ]
+}

@@ -11,7 +11,11 @@
 #
 # To compile, just make sure that avr-gcc and friends are in your path
 # and type "make".
-PROTOCOL_VERSION = 0x0201
+
+# Protocol version major version must fit
+# Major 0xff00, minor 0x00ff
+PROTOCOL_VERSION = 0x0302
+
 
 CPPSRC         = $(wildcard *.cpp)
 CPPSRC        += $(ARCH)/SelfProgram.cpp $(ARCH)/uart.cpp $(ARCH)/Reset.cpp $(ARCH)/Clock.cpp
@@ -28,26 +32,50 @@ BL_SIZE        = 2048
 FLASH_APP_OFFSET    = 0
 BL_OFFSET           = $(shell expr $(FLASH_SIZE) - $(BL_SIZE))
 else ifeq ($(ARCH),stm32)
+LDSCRIPT            = stm32/stm32g070rbt6.ld
 OPENCM3_DIR         = libopencm3
-DEVICE              = stm32g030c8t6
+DEVICE              = STM32G070RBT6
 FLASH_WRITE_SIZE    = 256
 FLASH_ERASE_SIZE    = 2048
-FLASH_SIZE          = 65536
 # Size of the bootloader area. Must be a multiple of the erase size
-BL_SIZE             = 4096
+BL_SIZE             = 8192
+BL_OFFSET           = 0
+
 # Bootloader is at the start of flash, so write app after it
 FLASH_APP_OFFSET    = $(BL_SIZE)
-BL_OFFSET           = 0
+# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
+APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
+# there is 128 bytes of FW descriptor at the end of app space
+FW_DESCRIPTOR_SIZE = 128
+
 endif
 
-VERSION_SIZE   = 4
-BL_VERSION     = 3
+VERSION_SIZE   = 7
+
+ifdef DEBUG
+#Debug version passes check in puppy
+	BL_VERSION     ?= 2147483647
+	BL_VERSION_PREFIX ?= 
+else
+	BL_VERSION     ?= 1
+	BL_VERSION_PREFIX ?= 
+endif
 
 CXXFLAGS       =
-CXXFLAGS      += -g3 -std=gnu++11
+CXXFLAGS      += -std=gnu++11
 CXXFLAGS      += -Wall -Wextra
-CXXFLAGS      += -Os -fpack-struct -fshort-enums
-CXXFLAGS      += -flto -fno-fat-lto-objects
+CXXFLAGS      += -fpack-struct -fshort-enums
+
+ifdef DEBUG
+	CXXFLAGS  += -g3 -Og
+else
+	CXXFLAGS  += -Os
+endif
+
+# Comment this out to enable watchdog, or put it into DEBUG to enable it only in release
+CXXFLAGS  += -DDISABLE_WATCHDOG
+
+#CXXFLAGS      += -flto -ffat-lto-objects
 # I would think these are not required with -flto, but adding these
 # removes a lot of unused functions that lto apparently leaves...
 CXXFLAGS      += -ffunction-sections -fdata-sections -Wl,--gc-sections
@@ -94,7 +122,8 @@ PREFIX         = arm-none-eabi-
 SIZE_FORMAT    = berkely
 
 CXXFLAGS      += -DSTM32
-CXXFLAGS      += -DAPPLICATION_SIZE="($(FLASH_SIZE)-$(FLASH_APP_OFFSET))"
+CXXFLAGS      += -DAPPLICATION_SIZE="($(APPLICATION_SIZE))"
+CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
 LDFLAGS       += -nostartfiles
 LDFLAGS       += -specs=nano.specs
 LDFLAGS       += -specs=nosys.specs
@@ -108,6 +137,8 @@ SIZE           = $(PREFIX)size
 
 ifdef OPENCM3_DIR
 include $(OPENCM3_DIR)/mk/genlink-config.mk
+# override LDSCRIPT set by the library, as we don't want to auto-generate it
+LDSCRIPT = stm32/stm32g070rbt6.ld
 ifeq ($(LIBNAME),)
 $(error libopencm3 library not found, compile it first with "make -C libopencm3 lib/stm32/g0 CFLAGS='-flto -fno-fat-lto-objects'")
 endif
@@ -120,21 +151,32 @@ ifdef CURRENT_HW_REVISION
   CURRENT_HW_REVISION_MAJOR=$(shell echo $$(($(CURRENT_HW_REVISION) / 0x10)))
   CURRENT_HW_REVISION_MINOR=$(shell echo $$(($(CURRENT_HW_REVISION) % 0x10)))
 
-  FILE_NAME=bootloader-v$(BL_VERSION)-$(BOARD_TYPE)-$(CURRENT_HW_REVISION_MAJOR).$(CURRENT_HW_REVISION_MINOR)$(BOARD_VARIANT)
+ifdef DEBUG
+  FILE_NAME=bootloader-debug-$(BOARD_TYPE)-$(CURRENT_HW_REVISION_MAJOR).$(CURRENT_HW_REVISION_MINOR)$(BOARD_VARIANT)
+else
+  FILE_NAME=bootloader-$(BL_VERSION_PREFIX)v$(BL_VERSION)-$(BOARD_TYPE)-$(CURRENT_HW_REVISION_MAJOR).$(CURRENT_HW_REVISION_MINOR)$(BOARD_VARIANT)
+endif
 endif
 
 # Make sure that .o files are deleted after building, so we can build for multiple
 # hw revisions without needing an explicit clean in between.
 .INTERMEDIATE: $(OBJ)
 
-default:
-	$(MAKE) all ARCH=attiny BUS=TwoWire BOARD_TYPE=interfaceboard BOARD_VARIANT=-old-adelco-display CURRENT_HW_REVISION=0x13 COMPATIBLE_HW_REVISION=0x01
-	$(MAKE) all ARCH=attiny BUS=TwoWire BOARD_TYPE=interfaceboard BOARD_VARIANT=-old-adelco-display CURRENT_HW_REVISION=0x14 COMPATIBLE_HW_REVISION=0x01
-	$(MAKE) all ARCH=attiny BUS=TwoWire BOARD_TYPE=interfaceboard EXTRA_INFO=0x2 BOARD_VARIANT=-old-adelco-display CURRENT_HW_REVISION=0x15 COMPATIBLE_HW_REVISION=0x01
-	$(MAKE) all ARCH=attiny BUS=TwoWire BOARD_TYPE=interfaceboard EXTRA_INFO=0x3 BOARD_VARIANT=-new-ea-display CURRENT_HW_REVISION=0x15 COMPATIBLE_HW_REVISION=0x01
-	$(MAKE) all ARCH=stm32 BUS=Rs485 BOARD_TYPE=gphopper CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+all: dwarf modularbed
 
-all: hex fuses size checksize
+dwarf:
+	$(MAKE) firmware ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+modularbed:
+	$(MAKE) firmware ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+dwarf_debug:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+modularbed_debug:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+firmware: hex fuses size checksize
 
 hex: $(FILE_NAME).hex
 
@@ -152,15 +194,10 @@ size:
 	$(SIZE) --format=$(SIZE_FORMAT) $(FILE_NAME).elf
 
 clean:
-	$(MAKE) cleanarch ARCH=attiny BUS=TwoWire
-	$(MAKE) cleanarch ARCH=stm32 BUS=TwoWire
 	$(MAKE) cleanarch ARCH=stm32 BUS=Rs485
 
 cleanarch:
 	rm -rf $(OBJ) $(OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin
-ifdef OPENCM3_DIR
-	rm -f $(LDSCRIPT)
-endif
 
 $(FILE_NAME).elf: $(OBJ) $(LDSCRIPT) $(LIBDEPS)
 	$(CC) $(CXXFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LDLIBS)
@@ -186,12 +223,7 @@ checksize: $(FILE_NAME).bin
 		false; \
 	fi
 
-# Rule to generate linker script
-ifdef OPENCM3_DIR
-include $(OPENCM3_DIR)/mk/genlink-rules.mk
-endif
-
-.PHONY: all lst hex clean fuses size
+.PHONY: all lst hex clean fuses size firmware
 
 # pull in dependency info for *existing* .o files
 -include $(OBJ:.o=.d)

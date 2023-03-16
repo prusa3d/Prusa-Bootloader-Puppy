@@ -15,141 +15,94 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "../Config.h"
-#if defined(USE_LL_HAL)
-#include <stm32yyxx_ll_gpio.h>
-#include <stm32yyxx_ll_usart.h>
-#include <stm32yyxx_ll_bus.h>
-#else
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/usart.h>
 #include <libopencm3/stm32/gpio.h>
-#endif
 #include <stdio.h>
 #include "../Bus.h"
+#include "../BaseProtocol.h"
 
-#if defined(USE_LL_HAL)
-	// Compatibility macros to run on ST LL HAL (e.g. inside STM32
-	// arduino core) rather than libopencm3. This is not intended as
-	// a complete and generic compatibility layer, but just minimal
-	// things to make the below code work.
-	#define USART_ICR(instance) (instance->ICR)
-	#define USART_ISR(instance) (instance->ISR)
-	#define USART_CR1(instance) (instance->CR1)
-	#define USART_CR3(instance) (instance->CR3)
-	#define usart_enable LL_USART_Enable
-	#define USART_PARITY_EVEN LL_USART_PARITY_EVEN
-	#define usart_set_parity LL_USART_SetParity
-	#define usart_enable_rx_timeout LL_USART_EnableRxTimeout
-	#define usart_set_rx_timeout_value LL_USART_SetRxTimeout
-	#define USART_MODE_TX_RX 0
-	#define usart_set_mode(instance, mode) do {LL_USART_EnableDirectionTx(instance); LL_USART_EnableDirectionRx(instance); } while(0)
-	// This assumes default ABP clock
-	#define usart_set_baudrate(instance, baud) LL_USART_SetBaudRate(instance, 16000000, LL_USART_PRESCALER_DIV1, LL_USART_OVERSAMPLING_16, baud)
-	#define RCC_GPIOA 0
-	#define RCC_USART1 LL_APB2_GRP1_PERIPH_USART1
-	#define rcc_periph_clock_enable(clk) do { \
-		if (clk == RCC_GPIOA) LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA); \
-		if (clk == RCC_USART1) LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_USART1); \
-	} while (0)
-	#define rcc_periph_clock_disable(clk) do { \
-		if (clk == RCC_GPIOA) LL_IOP_GRP1_DisableClock(LL_IOP_GRP1_PERIPH_GPIOA); \
-		if (clk == RCC_USART1) LL_APB2_GRP1_DisableClock(LL_APB2_GRP1_PERIPH_USART1); \
-	} while (0)
-	#define usart_set_databits(instance, bits) LL_USART_SetDataWidth(instance, bits == 9 ? LL_USART_DATAWIDTH_9B : (bits == 8 ? LL_USART_DATAWIDTH_8B : LL_USART_DATAWIDTH_7B))
-	#define usart_recv LL_USART_ReceiveData8
-	#define usart_send LL_USART_TransmitData8
-	#define USART_ISR_RXNE USART_ISR_RXNE_RXFNE
-	#define USART_ISR_TXE USART_ISR_TXE_TXFNF
-	#define USART_CR1_TXEIE USART_CR1_TXEIE_TXFNFIE
-	#define USART_CR1_RXNEIE USART_CR1_RXNEIE_RXFNEIE
-	#define RST_USART1 0
-	#define rcc_periph_reset_pulse(instance) LL_APB2_GRP1_ForceReset(LL_APB2_GRP1_PERIPH_USART1)
-	#define usart1_isr USART1_IRQHandler
-	#define nvic_enable_irq NVIC_EnableIRQ
-	#define NVIC_USART1_IRQ USART1_IRQn
-#endif // defined(USE_LL_HAL)
-
-static uint8_t initAddress = 0;
-static uint8_t initMask = 0;
-static uint8_t configuredAddress = 0;
-
-static const uint32_t BAUD_RATE = 1000000;
+static const uint32_t BAUD_RATE = 230400;
 static const uint32_t MAX_INTER_FRAME = 150; // us
 static const uint32_t INTER_FRAME_BITS = (MAX_INTER_FRAME * BAUD_RATE + 1e6 - 1) / 1e6;
 
-void BusInit(uint8_t initialAddress, uint8_t initialBits) {
-	initAddress = initialAddress;
-	// Create a mask with initialBits ones (address bits to match)
-	// followed by zeroes (address bits to ignore).
-	initMask = ~(0x7f >> initialBits);
+#if defined(BOARD_TYPE_prusa_dwarf)
+	#define RS485_USART USART1
+	#define RCC_RS485_USART RCC_USART1
+	#define RST_RS485_USART RST_USART1
 
-	BusResetDeviceAddress();
+#elif defined(BOARD_TYPE_prusa_modular_bed)
+	#define RS485_USART USART1
+	#define RCC_RS485_USART RCC_USART1
+	#define RST_RS485_USART RST_USART1
+#else
+	#error Unknown board
+#endif
+
+
+
+void BusInit() {
 
 	/* Setup clocks & GPIO for USART */
-	rcc_periph_clock_enable(RCC_USART1);
-	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_RS485_USART);
 
 	/* Setup USART parameters. */
-	usart_set_baudrate(USART1, BAUD_RATE);
-	usart_set_databits(USART1, 8+1); // Includes parity bit
-	usart_set_parity(USART1, USART_PARITY_EVEN);
-	usart_set_mode(USART1, USART_MODE_TX_RX);
+	usart_set_baudrate(RS485_USART, BAUD_RATE);
+	usart_set_databits(RS485_USART, 8);
+	usart_set_parity(RS485_USART, USART_PARITY_NONE);
+	usart_set_stopbits(RS485_USART, USART_CR2_STOPBITS_1);
 
-	usart_set_rx_timeout_value(USART1, INTER_FRAME_BITS);
-	usart_enable_rx_timeout(USART1);
+	usart_set_mode(RS485_USART, USART_MODE_TX_RX);
 
+	usart_set_rx_timeout_value(RS485_USART, INTER_FRAME_BITS);
+	usart_enable_rx_timeout(RS485_USART);
+
+
+#if defined(BOARD_TYPE_prusa_dwarf)
 	// Enable Driver Enable on RTS pin
-	USART_CR3(USART1) |= USART_CR3_DEM;
+	USART_CR3(RS485_USART) |= USART_CR3_DEM;
 
-	/* Finally enable the USART. */
-	usart_enable(USART1);
-
-	// RX & TX & RTS/DE
-	#if defined(USE_LL_HAL)
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_9, LL_GPIO_AF_1);
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_10, LL_GPIO_AF_1);
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_12, LL_GPIO_AF_1);
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_9, LL_GPIO_MODE_ALTERNATE);
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_10, LL_GPIO_MODE_ALTERNATE);
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_12, LL_GPIO_MODE_ALTERNATE);
-	#else
+	rcc_periph_clock_enable(RCC_GPIOA);
 	gpio_set_af(GPIOA, GPIO_AF1, GPIO9 | GPIO10 | GPIO12);
 	gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO9 | GPIO10 | GPIO12);
-	#endif
+#elif defined(BOARD_TYPE_prusa_modular_bed)
+	rcc_periph_clock_enable(RCC_GPIOA);
+	rcc_periph_clock_enable(RCC_GPIOD);
+	// RX/TX is PA9/PA10, alternate function 1
+	gpio_set_af(GPIOA, GPIO_AF1, GPIO9 | GPIO10);
+	gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO9 | GPIO10);
 
-	#if defined(BUS_USE_INTERRUPTS)
-	// Call update once to set up the right interrupt enables
-	BusUpdate();
-	nvic_enable_irq(NVIC_USART1_IRQ);
-	#endif
+	// transmission enable (485-REDE) pin
+	gpio_mode_setup(GPIOD, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO6);
+	gpio_set_output_options(GPIOD, GPIO_OTYPE_PP, GPIO_OSPEED_25MHZ,  GPIO6);
+	gpio_clear(GPIOD, GPIO6);
+#else
+	#error unkown board
+#endif
+
+	/* Finally enable the USART. */
+	usart_enable(RS485_USART);
 }
 
 void BusDeinit() {
-	rcc_periph_reset_pulse(RST_USART1);
+	rcc_periph_reset_pulse(RST_RS485_USART);
 
-	#if defined(USE_LL_HAL)
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_9, LL_GPIO_MODE_ANALOG);
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_10, LL_GPIO_MODE_ANALOG);
-	LL_GPIO_SetPinMode(GPIOA, LL_GPIO_PIN_12, LL_GPIO_MODE_ANALOG);
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_9, LL_GPIO_AF_0);
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_10, LL_GPIO_AF_0);
-	LL_GPIO_SetAFPin_8_15(GPIOA, LL_GPIO_PIN_12, LL_GPIO_AF_0);
-	#else
+#if defined(BOARD_TYPE_prusa_dwarf)
 	gpio_mode_setup(GPIOA, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO9 | GPIO10 | GPIO12);
 	gpio_set_af(GPIOA, GPIO_AF0, GPIO9 | GPIO10 | GPIO12);
-	#endif
-
-	rcc_periph_clock_disable(RCC_USART1);
 	rcc_periph_clock_disable(RCC_GPIOA);
-}
+#elif defined(BOARD_TYPE_prusa_modular_bed)
+	gpio_set_af(GPIOB, GPIO_AF0, GPIO6 | GPIO7);
+	gpio_mode_setup(GPIOB, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO6 | GPIO7);
+	gpio_mode_setup(GPIOD, GPIO_MODE_ANALOG, GPIO_PUPD_NONE, GPIO6);
 
-void BusSetDeviceAddress(uint8_t address) {
-	// Enable single address
-	configuredAddress = address;
-}
+	rcc_periph_clock_disable(RCC_GPIOB);
+	rcc_periph_clock_disable(RCC_GPIOD);
+#else
+	#error unkown board
+#endif
 
-void BusResetDeviceAddress() {
-	configuredAddress = 0;
+	rcc_periph_clock_disable(RCC_RS485_USART);
 }
 
 // For RS485, MAX_PACKET_LENGTH is defined including the address byte.
@@ -171,19 +124,15 @@ enum State {
 static State busState = StateIdle;
 
 static bool matchAddress(uint8_t address) {
-	if (address == 0) // General call
-		return true;
-	if (configuredAddress)
-		return address == configuredAddress;
-	return (address & initMask) == initAddress;
+	return address == getConfiguredAddress();
 }
 
-void BusUpdate() {
+bool BusUpdate() {
 	// Uncomment this to enable debug prints in this function
 	// Breaks Rs485 communication unless debug baudrate is 20x or so
 	// faster than Rs485!
 	#define printf(...) do {} while(0)
-	uint32_t isr = USART_ISR(USART1);
+	uint32_t isr = USART_ISR(RS485_USART);
 
 	/*
 	static uint32_t prev_isr = 0;
@@ -197,14 +146,24 @@ void BusUpdate() {
 	if (isr & USART_ISR_TXE && busState == StateWrite) {
 		// TX register empty, writing data clears TXE
 		printf("tx: %02x\n", (unsigned)busBuffer[busTxPos]);
-		usart_send(USART1, busBuffer[busTxPos++]);
+		#if defined(BOARD_TYPE_prusa_modular_bed)
+			gpio_set(GPIOD, GPIO6); // TE high to enable transmission
+		#endif
+		usart_send(RS485_USART, busBuffer[busTxPos++]);
 		if (busTxPos >= busBufferLen)
+		{
+			#if defined(BOARD_TYPE_prusa_modular_bed)
+				// wait for transmission complete, then clear the TE pin
+				while (!(USART_ISR(RS485_USART) & USART_ISR_TC)){}
+				gpio_clear(GPIOD, GPIO6); // TE low to enable receive
+			#endif
 			busState = StateIdle;
+		}
 		// TODO: Clear error flags and/or RTOF after TX?
 	} else if (isr & USART_ISR_RXNE && busState != StateWrite) { // Received data
 
 		// Reading data clears RXNE
-		uint8_t data = usart_recv(USART1);
+		uint8_t data = usart_recv(RS485_USART);
 		printf("rx: 0x%02x\n", (unsigned)data);
 
 		if (busState == StateIdle) {
@@ -238,7 +197,7 @@ void BusUpdate() {
 		}
 
 		// Clear timeout flag and any errors
-		USART_ICR(USART1) = USART_ICR_RTOCF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_ORECF;
+		USART_ICR(RS485_USART) = USART_ICR_RTOCF | USART_ICR_PECF | USART_ICR_FECF | USART_ICR_ORECF;
 
 		bool matched = matchAddress(busAddress);
 		printf("address 0x%x %smatched\n", busAddress, matched ? "" : "not ");
@@ -257,17 +216,13 @@ void BusUpdate() {
 		}
 	}
 	if (busState == StateWrite) {
-		USART_CR1(USART1) |= USART_CR1_TXEIE;
-		USART_CR1(USART1) &= ~(USART_CR1_RXNEIE | USART_CR1_RTOIE);
+		USART_CR1(RS485_USART) |= USART_CR1_TXEIE;
+		USART_CR1(RS485_USART) &= ~(USART_CR1_RXNEIE | USART_CR1_RTOIE);
 	} else {
-		USART_CR1(USART1) &= ~USART_CR1_TXEIE;
-		USART_CR1(USART1) |= USART_CR1_RXNEIE | USART_CR1_RTOIE;
+		USART_CR1(RS485_USART) &= ~USART_CR1_TXEIE;
+		USART_CR1(RS485_USART) |= USART_CR1_RXNEIE | USART_CR1_RTOIE;
 	}
 	#undef printf
-}
 
-#if defined(BUS_USE_INTERRUPTS)
-extern "C" void usart1_isr() {
-	BusUpdate();
+	return (busState != StateIdle);  //Return true if busy
 }
-#endif

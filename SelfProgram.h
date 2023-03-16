@@ -25,11 +25,29 @@ void startApplication();
 
 class SelfProgram {
 public:
-	static void readFlash(uint16_t address, uint8_t *data, uint16_t len);
+	static void readFlash(uint32_t address, uint8_t *data, uint16_t len);
 
-	static uint8_t readByte(uint16_t address);
+	static uint8_t readByte(uint32_t address);
 
-	static uint8_t writePage(uint16_t address, uint8_t *data, uint16_t len);
+	static uint8_t writePage(uint32_t address, uint8_t *data, uint16_t len);
+
+	/**
+	 * @brief Calculate salted fingerprint of the application.
+	 * @param salt 4 B salt added before the application, in this situation 4 B salt should be enough
+	 * This fingerprint encompasses the entire application area.
+	 * It is used as proof of original puppy to buddy.
+	 * Result is stored in internal variables appFwFingerprintValid, appFwFingerprint and appFwFingerprintSalt.
+	 */
+	static void calculateSaltedFingerprint(uint32_t salt);
+
+	/**
+	 * @brief Calculate static fingerprint of the application.
+	 * This fingerprint excludes the application descriptors.
+	 * It is used to verify application before running it.
+	 * @param fingerprint check the app with this fingerprint
+	 * @return true to run the application, false if corruption is detected
+	 */
+	static bool checkUnsaltedFingerprint(const unsigned char fingerprint[32]);
 
 	#if defined(NEED_TRAMPOLINE)
 	static void writeTrampoline(uint16_t instruction);
@@ -42,10 +60,13 @@ public:
 	// readability
 	static constexpr const uint16_t& applicationSize = trampolineStart;
 	#else
-	static constexpr const uint16_t applicationSize = APPLICATION_SIZE;
+	static constexpr const uint32_t applicationSize = APPLICATION_SIZE;
 	#endif // defined(NEED_TRAMPOLINE)
 
 	static uint8_t eraseCount;
+	static bool appFwFingerprintValid;
+	static unsigned char appFwFingerprint[32];
+	static uint32_t appFwFingerprintSalt;
 };
 
 #endif /* SELFPROGRAM_H_ */
