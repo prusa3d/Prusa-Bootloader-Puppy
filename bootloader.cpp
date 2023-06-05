@@ -392,7 +392,7 @@ void wait_for_end_of_power_panic() {
 #endif
 	power_panic.hiz();
 	// Power panic is active low, spin until it reads high
-	while(!power_panic.read()) {
+	while(power_panic.read()) {
 		watchdog_reset();
 	}
 }
