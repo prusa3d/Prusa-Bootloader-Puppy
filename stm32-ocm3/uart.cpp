@@ -38,7 +38,7 @@ static cookie_io_functions_t functions = {
 	.close = NULL
 };
 
-void uart_init(void) {
+void uart_stdout_init(void) {
 	/* Setup clocks & GPIO for USART */
 	rcc_periph_clock_enable(RCC_USART2);
 	rcc_periph_clock_enable(RCC_GPIOA);

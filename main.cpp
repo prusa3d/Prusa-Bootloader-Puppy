@@ -31,11 +31,10 @@
 //  /cygdrive/c/Program\ Files\ \(x86\)/Atmel/Atmel\ Toolchain/AVR8\ GCC/Native/3.4.1061/avr8-gnu-toolchain/bin/avr-objdump.exe -d Release/bootloader-attiny.elf
 
 
-
-#include <libopencm3/cm3/scb.h>
-#include <libopencm3/stm32/g0/flash.h>
 #include "bootloader.h"
 #include "SelfProgram.h"
+#include "fault_handlers.hpp"
+#include "uart.hpp"
 #include <stdio.h>
 
 
@@ -43,43 +42,6 @@
 // https://github.com/libopencm3/libopencm3-examples/issues/224
 #define FLASH_BASE                      (0x08000000U)
 #endif
-
-extern "C" {
-	// Ensure that any faults reset the system, rather than blocking
-	// in a loop. This ensures the board can be addressed even when
-	// a fault happens
-	void hard_fault_handler() { scb_reset_system(); }
-	void mem_manage_handler() __attribute__((alias("hard_fault_handler")));
-	void bus_fault_handler() __attribute__((alias("hard_fault_handler")));
-	void usage_fault_handler() __attribute__((alias("hard_fault_handler")));
-
-	/**
-	 * @brief Non-Maskable Interrupt.
-	 * Usually means non-recoverable hardware error.
-	 */
-	void nmi_handler() {
-		// When there is an error in flash, ECC will trigger an NMI interrupt
-		uint32_t eccr = FLASH_ECCR;
-		FLASH_ECCR = eccr;            // Clear interrupt flags
-		if (eccr & FLASH_ECCR_ECCD) { // ECC detection that could not be corrected
-
-			// Get address of the error, starts by 0 without the 0x08000000 offset
-			uint32_t fault_address = ((eccr & FLASH_ECCR_ADDR_ECC_MASK) >> FLASH_ECCR_ADDR_ECC_SHIFT) * 8;
-			if (fault_address > FLASH_APP_OFFSET) // Error is in application space
-			{
-				flash_unlock();
-				flash_clear_status_flags();
-				flash_erase_page(fault_address / FLASH_ERASE_SIZE); // Erase the offending page
-				flash_lock();
-			} else // Error is in bootloader, no way to fix this
-			{
-				while (1);
-			}
-		}
-
-		scb_reset_system();
-	}
-}
 
 void startApplication() __attribute__((__noreturn__));
 void startApplication() {
@@ -90,8 +52,6 @@ void startApplication() {
 	asm("msr msp, %0; bx %1;" : : "r"(top_of_stack), "r"(reset_vector));
 	__builtin_unreachable();
 }
-
-extern void uart_init();
 
 int main() {
 
@@ -106,7 +66,7 @@ int main() {
 	// Uncomment this to allow the use of printf on pin PA1 (ATTiny)
 	// or PA2 (stm32), TX only. See also usart.cpp. This needs a
 	// bigger bootloader area.
-	//uart_init();
+	//uart_stdout_init();
 	//printf("Hello\n");
 
 	runBootloader();
