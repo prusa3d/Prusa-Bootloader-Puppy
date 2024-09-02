@@ -20,6 +20,7 @@ PROTOCOL_VERSION = 0x0302
 CPPSRC         = $(wildcard *.cpp)
 CPPSRC        += $(ARCH)/SelfProgram.cpp $(ARCH)/uart.cpp $(ARCH)/Reset.cpp $(ARCH)/Clock.cpp
 CPPSRC        += $(ARCH)/$(BUS).cpp
+CPPSRC        += $(ARCH)/power_panic.cpp $(ARCH)/fan.cpp $(ARCH)/iwdg.cpp
 OBJ            = $(CPPSRC:.cpp=.o)
 ifeq ($(ARCH),attiny)
 LDSCRIPT       = $(ARCH)/linker-script.x
@@ -31,8 +32,8 @@ FLASH_SIZE          = 8192
 BL_SIZE        = 2048
 FLASH_APP_OFFSET    = 0
 BL_OFFSET           = $(shell expr $(FLASH_SIZE) - $(BL_SIZE))
-else ifeq ($(ARCH),stm32)
-LDSCRIPT            = stm32/stm32g070rbt6.ld
+else ifeq ($(ARCH),stm32-ocm3)
+LDSCRIPT            = stm32-ocm3/stm32g070rbt6.ld
 OPENCM3_DIR         = libopencm3
 DEVICE              = STM32G070RBT6
 FLASH_WRITE_SIZE    = 256
@@ -81,7 +82,7 @@ CXXFLAGS  += -DDISABLE_WATCHDOG
 CXXFLAGS      += -ffunction-sections -fdata-sections -Wl,--gc-sections
 CXXFLAGS      += -fno-exceptions
 
-CXXFLAGS      += -I$(ARCH)
+CXXFLAGS      += -I$(ARCH) -I.
 
 CXXFLAGS      += -DVERSION_SIZE=$(VERSION_SIZE)
 CXXFLAGS      += -DFLASH_ERASE_SIZE=$(FLASH_ERASE_SIZE)
@@ -117,7 +118,7 @@ LDFLAGS       += -Wl,--defsym=BL_SIZE=$(BL_SIZE)
 LDFLAGS       += -Wl,--defsym=VERSION_SIZE=$(VERSION_SIZE)
 # Pass ERASE_SIZE to the script to verify alignment
 LDFLAGS       += -Wl,--defsym=FLASH_ERASE_SIZE=$(FLASH_ERASE_SIZE)
-else ifeq ($(ARCH),stm32)
+else ifeq ($(ARCH),stm32-ocm3)
 PREFIX         = arm-none-eabi-
 SIZE_FORMAT    = berkely
 
@@ -138,7 +139,7 @@ SIZE           = $(PREFIX)size
 ifdef OPENCM3_DIR
 include $(OPENCM3_DIR)/mk/genlink-config.mk
 # override LDSCRIPT set by the library, as we don't want to auto-generate it
-LDSCRIPT = stm32/stm32g070rbt6.ld
+LDSCRIPT = stm32-ocm3/stm32g070rbt6.ld
 ifeq ($(LIBNAME),)
 $(error libopencm3 library not found, compile it first with "make -C libopencm3 lib/stm32/g0 CFLAGS='-flto -fno-fat-lto-objects'")
 endif
@@ -165,16 +166,16 @@ endif
 all: dwarf modularbed
 
 dwarf:
-	$(MAKE) firmware ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 modularbed:
-	$(MAKE) firmware ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 dwarf_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 modularbed_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 firmware: hex fuses size checksize
 
@@ -194,7 +195,7 @@ size:
 	$(SIZE) --format=$(SIZE_FORMAT) $(FILE_NAME).elf
 
 clean:
-	$(MAKE) cleanarch ARCH=stm32 BUS=Rs485
+	$(MAKE) cleanarch ARCH=stm32-ocm3 BUS=Rs485
 
 cleanarch:
 	rm -rf $(OBJ) $(OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin

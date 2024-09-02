@@ -16,9 +16,6 @@
  */
 
 #include <string.h>
-#include <libopencm3/stm32/desig.h>
-#include <libopencm3/stm32/iwdg.h>
-#include <libopencm3/stm32/flash.h>
 #include <stdio.h>
 
 #include "Config.h"
@@ -28,6 +25,9 @@
 #include "bootloader.h"
 #include "led.hpp"
 #include "crash_dump_shared.hpp"
+#include "power_panic.hpp"
+#include "iwdg.hpp"
+#include "fan.hpp"
 #include "Gpio.h"
 
 
@@ -336,67 +336,6 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 }
 
 
-#ifndef DISABLE_WATCHDOG /*Watchdog can be disabled by define in makefile*/
-
-/**
- * @brief Start IWDG and configure watchdog time.
- */
-static void watchdog_start() {
-	// Freeze IWDG on debug
-	#define DBGMCU_APB_FZ1               MMIO32(DBGMCU_BASE + 0x08) // Freeze register was not defined in opencm3
-	#define DBGMCU_APB_FZ1_DBG_IWDG_STOP 0x00001000                 // IWDG freeze bit in DBGMCU_APB_FZ1 register
-	rcc_periph_clock_enable(RCC_DBG);
-	DBGMCU_APB_FZ1 |= DBGMCU_APB_FZ1_DBG_IWDG_STOP; // Stop IWDG when core is halted by debugger
-	rcc_periph_clock_disable(RCC_DBG);
-
-	// Start and unlock IWDG
-	IWDG_KR = IWDG_KR_START;
-	IWDG_KR = IWDG_KR_UNLOCK;
-
-	// Configure IWDG
-	IWDG_PR = 0x6;     // Slowest, approx 32 kHz / 256 = 125 Hz
-	IWDG_RLR = 0xfff;  // Maximal, approx 2^12 / (~32 kHz / 256) = 32.768 s
-	IWDG_WINR = 0xfff; // Window disabled
-
-	// Cannot wait for IWDG update flags as buddy won't wait that long,
-	// handle it in watchdog_reset() instead
-}
-
-/**
- * @brief Wait for the IWDG peripheral to finish configuration and reset IWDG.
- */
-static void watchdog_reset() {
-	static bool started = false;
-	if (started) {
-		IWDG_KR = IWDG_KR_RESET; // Reset watchdog
-	} else if ((IWDG_SR & (IWDG_SR_WVU | IWDG_SR_RVU | IWDG_SR_PVU)) == 0x00u) {
-		started = true;
-	}
-}
-
-#else /*DISABLE_WATCHDOG*/
-	// Dummy symbols when watchdog is disabled
-	#define watchdog_start() do{}while(0)
-	#define watchdog_reset() do{}while(0)
-#endif /*DISABLE_WATCHDOG*/
-
-// Active wait until power panic signal is disabled
-void wait_for_end_of_power_panic() {
-	// TODO: Suspend CPU wake up by interrupt.
-#if defined(BOARD_TYPE_prusa_dwarf)
-		Pin power_panic = {RCC_GPIOA, GPIOA, GPIO11};
-#elif defined(BOARD_TYPE_prusa_modular_bed)
-		Pin power_panic = {RCC_GPIOC, GPIOC, GPIO11};
-#else
-	#error "Unknown board"
-#endif
-	power_panic.hiz();
-	// Power panic is active low, spin until it reads high
-	while(!power_panic.read()) {
-		watchdog_reset();
-	}
-}
-
 // Used to read the FW_DESCRIPTOR section persistent data, used attribute is to make sure it's not optimized away
 __attribute__((used)) const puppy_crash_dump::FWDescriptor * const fw_descriptor
 	= reinterpret_cast<puppy_crash_dump::FWDescriptor *>(puppy_crash_dump::APP_DESCRIPTOR_OFFSET + FLASH_APP_OFFSET + 0x08000000 );
@@ -407,20 +346,15 @@ extern "C" {
 		BusInit();
 
 		// Configure watchdog
-		watchdog_start();
-		watchdog_reset();		
+		WatchdogStart();
+		WatchdogReset();
 
 		// Avoid doing anything as long as power panic is active
-		wait_for_end_of_power_panic();
+		WaitForEndOfPowerPanic();
 
 		led::set_rgb(0, 0, 0x0f); // blue: bl is running
 
-		// Turn on heatbreak fan to avoid heat spreading across heatbreak
-#if defined(BOARD_TYPE_prusa_dwarf)
-		rcc_periph_clock_enable(RCC_GPIOC);
-		gpio_mode_setup(GPIOC, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, GPIO6);
-		gpio_set(GPIOC, GPIO6);
-#endif
+		StartFan();
 
 		bool busy = true;
 		while (busy || !bootloaderExit) {
@@ -428,7 +362,7 @@ extern "C" {
 			busy = BusUpdate();
 			#endif // defined(BUS_USE_INTERRUPTS)
 
-			watchdog_reset();
+			WatchdogReset();
 		}
 
                 //Check with unsalted fingerprint if necessary
@@ -444,7 +378,7 @@ extern "C" {
 			){
 			while(true) {
 				led::set_rgb(0x0f, 0x08, 0x00); // orange: not safe to start
-				watchdog_reset();
+				WatchdogReset();
 			}
 		}
 
