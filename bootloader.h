@@ -18,6 +18,8 @@
 #ifndef BOOTLOADER_H_
 #define BOOTLOADER_H_
 
+#include <stdint.h>
+#include "otp.hpp"
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,6 +28,7 @@ extern "C" {
 void runBootloader();
 void ClockInit();
 void ClockDeinit();
+OTP_v5 GetOTPData();
 
 #ifdef __cplusplus
 }
