@@ -25,11 +25,13 @@
 #include "bootloader.h"
 #include "led.hpp"
 #include "crash_dump_shared.hpp"
+#include "otp.hpp"
 #include "power_panic.hpp"
 #include "iwdg.hpp"
 #include "fan.hpp"
 #include "Gpio.h"
 
+extern "C" void _init() {}
 
 struct Commands {
 	// See also ProtocolCommands in BaseProtocol.h
@@ -74,10 +76,6 @@ struct __attribute__((packed)) ApplicationStartupArguments {
 struct ApplicationStartupArguments application_startup_arguments __attribute__((__section__(".app_args"), __used__)) = {
     .modbus_address = 0xFF,
 };
-
-// OTP area
-static constexpr uint32_t OTP_START_ADDR = 0x1FFF7000UL;
-static constexpr uint32_t OTP_SIZE = 1024;
 
 // Check that the version info size used by the linker (which must be
 // hardcoded...) is correct.
@@ -165,19 +163,18 @@ static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len
  * @return revision number (only VV field of datamatrix, no factorify ID)
  */
 uint8_t get_revision() {
-	uint8_t otp_v = *(uint8_t*)(OTP_START_ADDR);
-	if (otp_v != 5)	{ // This understands only OTP v5
+	OTP_v5 otp = get_OTP_data();
+	if (otp.version != 5)	{
 		return 0;
 	}
 
-	char *datamatrix = (char*)(OTP_START_ADDR + 8);
-	if ((datamatrix[4] != '-')                            // Separator between factorify product ID and revision
-		|| (datamatrix[5] < '0') || (datamatrix[5] > '9') // Revision is two decimal digits
-		|| (datamatrix[6] < '0') || (datamatrix[6] > '9')) {
+	if ((otp.datamatrix[4] != '-')                            // Separator between factorify product ID and revision
+		|| (otp.datamatrix[5] < '0') || (otp.datamatrix[5] > '9') // Revision is two decimal digits
+		|| (otp.datamatrix[6] < '0') || (otp.datamatrix[6] > '9')) {
 		return 0;
 	}
 
-	return (datamatrix[5] - '0') * 10 + (datamatrix[6] - '0');
+	return (otp.datamatrix[5] - '0') * 10 + (otp.datamatrix[6] - '0');
 }
 
 /**
@@ -210,7 +207,11 @@ cmd_result readMemory(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *dataou
 		return cmd_result(Status::INVALID_ARGUMENTS);
 	}
 
-	memcpy(dataout, (uint8_t*)(memOffset + address), readlen);
+    if (cmd == Commands::READ_FLASH) {
+	    memcpy(dataout, (uint8_t*)(memOffset + address), readlen);
+    } else {
+        read_otp(address, dataout, readlen);
+    }
 	return cmd_ok(readlen);
 }
 

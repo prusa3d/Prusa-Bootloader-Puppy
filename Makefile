@@ -16,12 +16,26 @@
 # Major 0xff00, minor 0x00ff
 PROTOCOL_VERSION = 0x0302
 
-
 CPPSRC         = $(wildcard *.cpp)
 CPPSRC        += $(ARCH)/SelfProgram.cpp $(ARCH)/uart.cpp $(ARCH)/Reset.cpp $(ARCH)/Clock.cpp
 CPPSRC        += $(ARCH)/$(BUS).cpp
-CPPSRC        += $(ARCH)/power_panic.cpp $(ARCH)/fan.cpp $(ARCH)/iwdg.cpp
+CPPSRC        += $(ARCH)/power_panic.cpp $(ARCH)/fan.cpp $(ARCH)/iwdg.cpp $(ARCH)/otp.cpp
+HALSRC         =
+ifeq ($(ARCH),stm32-h5hal)
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_cortex.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash_ex.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_rcc.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_usart.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_gpio.c
+HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_utils.c
+HALSRC        += stm32-h5hal/system_stm32h5xx.c
+HALSRC        += stm32-h5hal/startup_stm32h503cbux.s
+endif
 OBJ            = $(CPPSRC:.cpp=.o)
+EXTRA_OBJ_1    = $(HALSRC:.c=.o)
+EXTRA_OBJ      = $(EXTRA_OBJ_1:.s=.o)
 ifeq ($(ARCH),attiny)
 LDSCRIPT       = $(ARCH)/linker-script.x
 MCU            = attiny841
@@ -49,6 +63,20 @@ APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
 # there is 128 bytes of FW descriptor at the end of app space
 FW_DESCRIPTOR_SIZE = 128
 
+else ifeq ($(ARCH),stm32-h5hal)
+LDSCRIPT            = stm32-h5hal/stm32h503cbux.ld
+FLASH_WRITE_SIZE    = 8192
+FLASH_ERASE_SIZE    = 8192
+
+BL_SIZE             = 8192
+BL_OFFSET           = 0
+
+# Bootloader is at the start of flash, so write app after it
+FLASH_APP_OFFSET    = $(BL_SIZE)
+# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
+APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
+# there is 128 bytes of FW descriptor at the end of app space
+FW_DESCRIPTOR_SIZE = 128
 endif
 
 VERSION_SIZE   = 7
@@ -63,15 +91,10 @@ else
 endif
 
 CXXFLAGS       =
-CXXFLAGS      += -std=gnu++11
 CXXFLAGS      += -Wall -Wextra
 CXXFLAGS      += -fpack-struct -fshort-enums
 
-ifdef DEBUG
-	CXXFLAGS  += -g3 -Og
-else
-	CXXFLAGS  += -Os
-endif
+CXXFLAGS  += -ggdb3 -Os
 
 # Comment this out to enable watchdog, or put it into DEBUG to enable it only in release
 CXXFLAGS  += -DDISABLE_WATCHDOG
@@ -83,6 +106,21 @@ CXXFLAGS      += -ffunction-sections -fdata-sections -Wl,--gc-sections
 CXXFLAGS      += -fno-exceptions
 
 CXXFLAGS      += -I$(ARCH) -I.
+ifeq ($(ARCH),stm32-h5hal)
+CXXFLAGS      += -Istm32h5xx_hal_driver/Inc
+CXXFLAGS	  += -Istm32-h5hal/CMSIS/Device/ST/STM32H5xx/Include
+CXXFLAGS	  += -Istm32-h5hal/CMSIS/Include
+
+CXXFLAGS      += -mcpu=cortex-m33 -mfloat-abi=hard -mfpu=fpv5-sp-d16
+
+CXXFLAGS	  += -DSTM32H503xx
+CXXFLAGS	  += -DSTM32H5
+CXXFLAGS	  += -DUSE_HAL_DRIVER
+CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
+CXXFLAGS	  += -DFIXED_ADDRESS=17 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
+
+CXXFLAGS      += -flto -ffat-lto-objects
+endif
 
 CXXFLAGS      += -DVERSION_SIZE=$(VERSION_SIZE)
 CXXFLAGS      += -DFLASH_ERASE_SIZE=$(FLASH_ERASE_SIZE)
@@ -129,6 +167,16 @@ LDFLAGS       += -nostartfiles
 LDFLAGS       += -specs=nano.specs
 LDFLAGS       += -specs=nosys.specs
 # TODO: Position VERSION constant
+else ifeq ($(ARCH),stm32-h5hal)
+PREFIX         = arm-none-eabi-
+SIZE_FORMAT    = berkely
+
+CXXFLAGS      += -DSTM32
+CXXFLAGS      += -DAPPLICATION_SIZE="($(APPLICATION_SIZE))"
+CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
+LDFLAGS       += -nostartfiles
+LDFLAGS       += -specs=nano.specs
+LDFLAGS       += -specs=nosys.specs
 endif
 
 CC             = $(PREFIX)gcc
@@ -161,9 +209,9 @@ endif
 
 # Make sure that .o files are deleted after building, so we can build for multiple
 # hw revisions without needing an explicit clean in between.
-.INTERMEDIATE: $(OBJ)
+.INTERMEDIATE: $(OBJ) $(EXTRA_OBJ)
 
-all: dwarf modularbed
+all: dwarf modularbed xbuddy_extension
 
 dwarf:
 	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
@@ -171,11 +219,17 @@ dwarf:
 modularbed:
 	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
+xbuddy_extension:
+	$(MAKE) firmware ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
 dwarf_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 modularbed_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+xbuddy_extension_debug:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 firmware: hex fuses size checksize
 
@@ -196,24 +250,31 @@ size:
 
 clean:
 	$(MAKE) cleanarch ARCH=stm32-ocm3 BUS=Rs485
+	$(MAKE) cleanarch ARCH=stm32-h5hal BUS=RS485
 
 cleanarch:
-	rm -rf $(OBJ) $(OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin
+	rm -rf $(OBJ) $(OBJ:.o=.d) $(EXTRA_OBJ) $(EXTRA_OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin
 
-$(FILE_NAME).elf: $(OBJ) $(LDSCRIPT) $(LIBDEPS)
-	$(CC) $(CXXFLAGS) $(LDFLAGS) -o $@ $(OBJ) $(LDLIBS)
+$(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
+	$(CC) $(CXXFLAGS) $(LDFLAGS) -o $@ $(EXTRA_OBJ) $(OBJ) $(LDLIBS)
 
 %.o: %.cpp Makefile
+	$(CC) -std=gnu++11 $(CXXFLAGS) -MMD -MP -c -o $@ $<
+
+%.o: %.c Makefile
+	$(CC) -std=gnu99 $(CXXFLAGS) -MMD -MP -c -o $@ $<
+
+%.o: %.s Makefile
 	$(CC) $(CXXFLAGS) -MMD -MP -c -o $@ $<
 
 %.lst: %.elf
 	$(OBJDUMP) -h -S $< > $@
 
 %.hex: %.elf
-	$(OBJCOPY) -j .text -j '.text.*' -j .data -O ihex $< $@
+	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O ihex $< $@
 
 %.bin: %.elf
-	$(OBJCOPY) -j .text -j '.text.*' -j .data -O binary $< $@
+	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O binary $< $@
 
 # When the bootloader has an offset, objcopy pads the pin file at the
 # start, so correct for that.
@@ -228,3 +289,4 @@ checksize: $(FILE_NAME).bin
 
 # pull in dependency info for *existing* .o files
 -include $(OBJ:.o=.d)
+-include $(EXTRA_OBJ:.o=.d)

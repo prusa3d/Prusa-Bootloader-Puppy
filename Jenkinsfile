@@ -43,6 +43,12 @@ pipeline {
                 sh "make modularbed"
             }
         }
+
+        stage("Build XBuddy Extension") {
+            steps {
+                sh "make xbuddy_extension"
+            }
+        }
     }
 
     post {

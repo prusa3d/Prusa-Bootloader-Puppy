@@ -18,21 +18,29 @@
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
-#include <stdint.h>
+#include <cstdint>
 #include <Gpio.h>
+
+#ifdef FIXED_ADDRESS
+    const uint8_t INITIAL_ADDRESS = (FIXED_ADDRESS);
+    #define NEEDS_ADDRESS_CHANGE 0
+#else
+	const uint8_t INITIAL_ADDRESS = 0x00;
+#endif
 
 #if defined(BOARD_TYPE_prusa_dwarf)
 	const uint8_t INFO_HW_TYPE = 42;
     const uint16_t MAX_PACKET_LENGTH = 255;
-	const uint8_t INITIAL_ADDRESS = 0x00;
     #define SYSTEM_CORE_CLOCK 64000000
     #define NEEDS_ADDRESS_CHANGE 1
 #elif defined(BOARD_TYPE_prusa_modular_bed)
 	const uint8_t INFO_HW_TYPE = 43;
     const uint16_t MAX_PACKET_LENGTH = 255;
-	const uint8_t INITIAL_ADDRESS = 0x00;
     #define SYSTEM_CORE_CLOCK 64000000
     #define NEEDS_ADDRESS_CHANGE 0
+#elif defined(BOARD_TYPE_prusa_xbuddy_extension)
+	const uint8_t INFO_HW_TYPE = 44;
+    const uint16_t MAX_PACKET_LENGTH = 255;
 #else
 	#error "No board type defined"
 #endif
