@@ -13,8 +13,8 @@
 
 #if BOARD_TYPE == prusa_xbuddy_extension
 #define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_14
-#define D_RS485_FLOW_CONTROL_GPIO_Port GPIOC
-#define USART_CHANNEL USART1
+#define D_RS485_FLOW_CONTROL_GPIO_Port GPIOB
+#define USART_CHANNEL USART3
 #else
 #error "Undefined modbus channel and flow control gpio"
 #endif
@@ -23,24 +23,23 @@ void BusInit() {
     LL_GPIO_InitTypeDef GPIO_InitStruct{};
     LL_USART_InitTypeDef USART_InitStruct{};
 
-    LL_RCC_SetUSARTClockSource(LL_RCC_USART1_CLKSOURCE_PCLK2);
+    LL_RCC_SetUSARTClockSource(LL_RCC_USART3_CLKSOURCE_PCLK1);
 
     /* Peripheral clock enable */
-    LL_APB2_GRP1_EnableClock(LL_APB2_GRP1_PERIPH_USART1);
+    LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_USART3);
 
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
-    LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOC);
 
-    /**USART1 GPIO Configuration
-    PB14   ------> USART1_TX
-    PB15   ------> USART1_RX
+    /**USART3 GPIO Configuration
+    PB7   ------> USART3_TX
+    PB8   ------> USART3_RX
     */
-    GPIO_InitStruct.Pin = LL_GPIO_PIN_14 | LL_GPIO_PIN_15;
+    GPIO_InitStruct.Pin = LL_GPIO_PIN_7 | LL_GPIO_PIN_8;
     GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
     GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
     GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-    GPIO_InitStruct.Alternate = LL_GPIO_AF_4;
+    GPIO_InitStruct.Alternate = LL_GPIO_AF_13;
     LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     memset(&GPIO_InitStruct, 0, sizeof(GPIO_InitStruct));
