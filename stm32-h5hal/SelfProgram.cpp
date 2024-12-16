@@ -11,7 +11,7 @@ uint8_t SelfProgram::writePage(uint32_t address, uint8_t *data, uint16_t len) {
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_WRPERR | FLASH_FLAG_PGSERR);
     
-    const bool first_bank = (address + FLASH_APP_OFFSET) > FLASH_BANK_SIZE;
+    const bool first_bank = (address + FLASH_APP_OFFSET) < FLASH_BANK_SIZE;
     const auto bank = first_bank ? FLASH_BANK_1 : FLASH_BANK_2;
     const size_t sectors_per_bank = FLASH_BANK_SIZE / FLASH_SECTOR_SIZE;
     const auto sector = ((address + FLASH_APP_OFFSET) / FLASH_SECTOR_SIZE) % sectors_per_bank;
