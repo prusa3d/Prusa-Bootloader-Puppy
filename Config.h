@@ -41,6 +41,11 @@
 #elif defined(BOARD_TYPE_prusa_xbuddy_extension)
 	const uint8_t INFO_HW_TYPE = 44;
     const uint16_t MAX_PACKET_LENGTH = 255;
+// Reserved INFO_HW_TYPE = 50 for BOARD_TYPE_prusa_slx_led_indv_bridge
+#elif defined(BOARD_TYPE_prusa_baseboard10)
+    const uint8_t INFO_HW_TYPE = 51;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+    #define NEEDS_ADDRESS_CHANGE 0
 #else
 	#error "No board type defined"
 #endif
