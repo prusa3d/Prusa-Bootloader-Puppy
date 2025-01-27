@@ -33,50 +33,82 @@ HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_utils.c
 HALSRC        += stm32-h5hal/system_stm32h5xx.c
 HALSRC        += stm32-h5hal/startup_stm32h503cbux.s
 endif
+
+ifeq ($(ARCH),stm32-f4hal)
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_cortex.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_rcc.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_uart.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_flash.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_flash_ex.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_rcc.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_usart.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_gpio.c
+HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_utils.c
+HALSRC        += stm32-f4hal/system_stm32f4xx.c
+HALSRC        += stm32-f4hal/startup_stm32f427xx.s
+
+endif
+
 OBJ            = $(CPPSRC:.cpp=.o)
 EXTRA_OBJ_1    = $(HALSRC:.c=.o)
 EXTRA_OBJ      = $(EXTRA_OBJ_1:.s=.o)
 ifeq ($(ARCH),attiny)
-LDSCRIPT       = $(ARCH)/linker-script.x
-MCU            = attiny841
-FLASH_WRITE_SIZE    = SPM_PAGESIZE # Defined by avr-libc
-FLASH_ERASE_SIZE    = 64
-FLASH_SIZE          = 8192
-# Size of the bootloader area. Must be a multiple of the erase size
-BL_SIZE        = 2048
-FLASH_APP_OFFSET    = 0
-BL_OFFSET           = $(shell expr $(FLASH_SIZE) - $(BL_SIZE))
+	LDSCRIPT       = $(ARCH)/linker-script.x
+	MCU            = attiny841
+	FLASH_WRITE_SIZE    = SPM_PAGESIZE # Defined by avr-libc
+	FLASH_ERASE_SIZE    = 64
+	FLASH_SIZE          = 8192
+	# Size of the bootloader area. Must be a multiple of the erase size
+	BL_SIZE        = 2048
+	FLASH_APP_OFFSET    = 0
+	BL_OFFSET           = $(shell expr $(FLASH_SIZE) - $(BL_SIZE))
 else ifeq ($(ARCH),stm32-ocm3)
-LDSCRIPT            = stm32-ocm3/stm32g070rbt6.ld
-OPENCM3_DIR         = libopencm3
-DEVICE              = STM32G070RBT6
-FLASH_WRITE_SIZE    = 256
-FLASH_ERASE_SIZE    = 2048
-# Size of the bootloader area. Must be a multiple of the erase size
-BL_SIZE             = 8192
-BL_OFFSET           = 0
+	LDSCRIPT            = stm32-ocm3/stm32g070rbt6.ld
+	OPENCM3_DIR         = libopencm3
+	DEVICE              = STM32G070RBT6
+	FLASH_WRITE_SIZE    = 256
+	FLASH_ERASE_SIZE    = 2048
+	# Size of the bootloader area. Must be a multiple of the erase size
+	BL_SIZE             = 8192
+	BL_OFFSET           = 0
 
-# Bootloader is at the start of flash, so write app after it
-FLASH_APP_OFFSET    = $(BL_SIZE)
-# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
-APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
-# there is 128 bytes of FW descriptor at the end of app space
-FW_DESCRIPTOR_SIZE = 128
+	# Bootloader is at the start of flash, so write app after it
+	FLASH_APP_OFFSET    = $(BL_SIZE)
+	# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
+	APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
+	# there is 128 bytes of FW descriptor at the end of app space
+	FW_DESCRIPTOR_SIZE = 128
 
 else ifeq ($(ARCH),stm32-h5hal)
-LDSCRIPT            = stm32-h5hal/stm32h503cbux.ld
-FLASH_WRITE_SIZE    = 8192
-FLASH_ERASE_SIZE    = 8192
+	LDSCRIPT            = stm32-h5hal/stm32h503cbux.ld
+	FLASH_WRITE_SIZE    = 8192
+	FLASH_ERASE_SIZE    = 8192
 
-BL_SIZE             = 8192
-BL_OFFSET           = 0
+	BL_SIZE             = 8192
+	BL_OFFSET           = 0
 
-# Bootloader is at the start of flash, so write app after it
-FLASH_APP_OFFSET    = $(BL_SIZE)
-# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
-APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
-# there is 128 bytes of FW descriptor at the end of app space
-FW_DESCRIPTOR_SIZE = 128
+	# Bootloader is at the start of flash, so write app after it
+	FLASH_APP_OFFSET    = $(BL_SIZE)
+	# actual flash size is 128kb, but we are currently limited to application size of 64kb due offset being uint16
+	APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
+	# there is 128 bytes of FW descriptor at the end of app space
+	FW_DESCRIPTOR_SIZE = 128
+else ifeq ($(ARCH),stm32-f4hal)
+	LDSCRIPT            = stm32-f4hal/STM32F427ZITx_FLASH.ld
+	FW_DESCRIPTOR_SIZE  = 128
+	# TODO: It seem that F427 has different sizes of flash sectors
+	# - update / replace this later
+
+	# This chip has different sizes of erase&write sectors,
+	# -> this does not make sense. FIXME: replace with sector table
+	FLASH_WRITE_SIZE    = 8192
+	FLASH_ERASE_SIZE    = 8192
+
+	BL_SIZE             = 16*1024 # Size of the first flash sector
+	BL_OFFSET           = 0
+	FLASH_APP_OFFSET    = BL_SIZE
+	APPLICATION_SIZE    = 2048*1024-FLASH_APP_OFFSET
 endif
 
 VERSION_SIZE   = 7
@@ -84,10 +116,10 @@ VERSION_SIZE   = 7
 ifdef DEBUG
 #Debug version passes check in puppy
 	BL_VERSION     ?= 2147483647
-	BL_VERSION_PREFIX ?= 
+	BL_VERSION_PREFIX ?=
 else
 	BL_VERSION     ?= 1
-	BL_VERSION_PREFIX ?= 
+	BL_VERSION_PREFIX ?=
 endif
 
 CXXFLAGS       =
@@ -120,6 +152,21 @@ CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
 CXXFLAGS	  += -DFIXED_ADDRESS=17 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
 
 CXXFLAGS      += -flto -ffat-lto-objects
+
+endif
+
+ifeq ($(ARCH),stm32-f4hal)
+    CXXFLAGS          += -Istm32f4xx_hal_driver/Inc
+    CXXFLAGS          += -Istm32-f4hal/CMSIS/Device/ST/STM32F4xx/Include
+    CXXFLAGS          += -Istm32-f4hal/CMSIS/Include
+    CXXFLAGS          += -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv5-sp-d16 -mthumb
+    CXXFLAGS          += -DSTM32F427xx
+    CXXFLAGS          += -DSTM32F4
+    CXXFLAGS          += -DUSE_HAL_DRIVER
+    CXXFLAGS          += -DUSE_FULL_LL_DRIVER
+    CXXFLAGS          += -DFIXED_ADDRESS=2
+    CXXFLAGS          += -DBL_SIZE=$(BL_SIZE)
+#    CXXFLAGS          += -flto -ffat-lto-objects
 endif
 
 CXXFLAGS      += -DVERSION_SIZE=$(VERSION_SIZE)
@@ -177,6 +224,17 @@ CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
 LDFLAGS       += -nostartfiles
 LDFLAGS       += -specs=nano.specs
 LDFLAGS       += -specs=nosys.specs
+
+else ifeq ($(ARCH),stm32-f4hal)
+PREFIX         = arm-none-eabi-
+SIZE_FORMAT    = berkely
+
+CXXFLAGS      += -DSTM32
+CXXFLAGS      += -DAPPLICATION_SIZE="($(APPLICATION_SIZE))"
+CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
+LDFLAGS       += -nostartfiles
+LDFLAGS       += -specs=nano.specs
+LDFLAGS       += -specs=nosys.specs
 endif
 
 CC             = $(PREFIX)gcc
@@ -211,7 +269,7 @@ endif
 # hw revisions without needing an explicit clean in between.
 .INTERMEDIATE: $(OBJ) $(EXTRA_OBJ)
 
-all: dwarf modularbed xbuddy_extension
+all: dwarf modularbed xbuddy_extension prusa_baseboard10
 
 dwarf:
 	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
@@ -231,6 +289,8 @@ modularbed_debug:
 xbuddy_extension_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
+baseboard10:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_baseboard10 CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 firmware: hex fuses size checksize
 
 hex: $(FILE_NAME).hex
@@ -280,6 +340,7 @@ $(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
 # start, so correct for that.
 MAX_BIN_SIZE=$(shell expr $(BL_OFFSET) + $(BL_SIZE))
 checksize: $(FILE_NAME).bin
+	@echo $$(stat -c '%s' $<)
 	@if [ $$(stat -c '%s' $<) -gt $(MAX_BIN_SIZE) ]; then \
 		echo "Compiled size too big, maybe adjust BL_SIZE in Makefile?"; \
 		false; \
