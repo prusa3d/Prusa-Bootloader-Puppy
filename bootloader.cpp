@@ -16,7 +16,6 @@
  */
 
 #include <string.h>
-#include <stdio.h>
 
 #include "Config.h"
 #include "Bus.h"
@@ -45,12 +44,12 @@ struct Commands {
 	static const uint8_t READ_OTP              = 0x10;
 
 	// These were removed and should not be used
-	static const uint8_t RESERVED_02 = 0x02; ///< POWER_UP_DISPLAY     
+	static const uint8_t RESERVED_02 = 0x02; ///< POWER_UP_DISPLAY
 	static const uint8_t RESERVED_04 = 0x04; ///< GET_SERIAL_NUMBER
 	static const uint8_t RESERVED_09 = 0x09; ///< GET_HARDWARE_REVISION
-	static const uint8_t RESERVED_0a = 0x0a; ///< GET_NUM_CHILDREN     
-	static const uint8_t RESERVED_0b = 0x0b; ///< SET_CHILD_SELECT     
-	static const uint8_t RESERVED_0d = 0x0d; ///< GET_EXTRA_INFO       
+	static const uint8_t RESERVED_0a = 0x0a; ///< GET_NUM_CHILDREN
+	static const uint8_t RESERVED_0b = 0x0b; ///< SET_CHILD_SELECT
+	static const uint8_t RESERVED_0d = 0x0d; ///< GET_EXTRA_INFO
 	static const uint8_t RESERVED_46 = 0x46; ///< RESET
 	static const uint8_t RESERVED_44 = 0x44; ///< RESET_ADDRESS
 };
@@ -116,7 +115,6 @@ static bool equalToFlash(uint32_t address, uint16_t len) {
 
 
 static uint8_t commitToFlash(uint32_t address, uint16_t len) {
-	// If nothing needs to be changed, then don't
 	if (equalToFlash(address, len))
 		return 0;
 
@@ -133,8 +131,17 @@ static uint8_t commitToFlash(uint32_t address, uint16_t len) {
 }
 
 static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len, uint8_t *dataout) {
-	if (address == 0)
-		nextWriteAddress = 0;
+
+	if(address == 0) {
+		// Erase the application flash area
+		if (SelfProgram::eraseApplicationFlash() != 0) {
+			dataout[0] = 1;
+			return cmd_result(Status::COMMAND_FAILED, 1);
+		}
+	}
+
+	if (address % sizeof(writeBuffer) == 0)
+		nextWriteAddress = address;
 
 	// Only consecutive writes are supported
 	if (address != nextWriteAddress)
@@ -326,7 +333,7 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 			}
 
 			SelfProgram::appFwFingerprintSalt = datain[0] << 24 | datain[1] << 16 | datain[2] << 8 | datain[3];
-			
+
 			SelfProgram::calculateSaltedFingerprint(SelfProgram::appFwFingerprintSalt);
 			return cmd_ok();
 		}

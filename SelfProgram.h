@@ -25,6 +25,18 @@ void startApplication();
 
 class SelfProgram {
 public:
+
+	/**
+	 * @brief Erase the application flash area
+	 *
+	 * Called before writing the application to ensure that the flash is empty.
+	 *
+	 * __weak default implementation does nothing. Override if required.
+	 *
+	 * @return 0 on success, 1 on failure
+	 */
+	static uint8_t eraseApplicationFlash();
+
 	static void readFlash(uint32_t address, uint8_t *data, uint16_t len);
 
 	static uint8_t readByte(uint32_t address);
