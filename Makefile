@@ -47,6 +47,7 @@ HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_gpio.c
 HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_utils.c
 HALSRC        += stm32-f4hal/system_stm32f4xx.c
 HALSRC        += stm32-f4hal/startup_stm32f427xx.s
+HALSRC		  += stm32-f4hal/setup_stdout.c
 
 endif
 

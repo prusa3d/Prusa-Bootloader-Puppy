@@ -51,6 +51,7 @@ void ClockInit() {
         while(1);
     }
 
+    TPI->ACPR = HAL_RCC_GetHCLKFreq() / 2000000 - 1;
 }
 
 void ClockDeinit() {
