@@ -103,10 +103,10 @@ else ifeq ($(ARCH),stm32-f4hal)
 
 	# This chip has different sizes of erase&write sectors,
 	# -> this does not make sense. FIXME: replace with sector table
-	FLASH_WRITE_SIZE    = 8192
-	FLASH_ERASE_SIZE    = 8192
+	FLASH_WRITE_SIZE    = 16384
+	FLASH_ERASE_SIZE    = 16384
 
-	BL_SIZE             = 16*1024 # Size of the first flash sector
+	BL_SIZE             = 16384 # Size of the first flash sector
 	BL_OFFSET           = 0
 	FLASH_APP_OFFSET    = BL_SIZE
 	APPLICATION_SIZE    = 2048*1024-FLASH_APP_OFFSET
@@ -167,7 +167,7 @@ ifeq ($(ARCH),stm32-f4hal)
     CXXFLAGS          += -DUSE_FULL_LL_DRIVER
     CXXFLAGS          += -DFIXED_ADDRESS=2
     CXXFLAGS          += -DBL_SIZE=$(BL_SIZE)
-#    CXXFLAGS          += -flto -ffat-lto-objects
+    CXXFLAGS          += -flto -ffat-lto-objects
 endif
 
 CXXFLAGS      += -DVERSION_SIZE=$(VERSION_SIZE)
