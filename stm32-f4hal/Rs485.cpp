@@ -15,6 +15,7 @@
 #include <cassert>
 
 #if BOARD_TYPE == prusa_baseboard10
+#include "Gpio.h"
 #define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_4
 #define D_RS485_FLOW_CONTROL_GPIO_Port GPIOD
 #define USART_CHANNEL USART2
@@ -23,6 +24,7 @@
 #endif
 
 void BusInit() {
+    gpio_init();
     LL_GPIO_InitTypeDef GPIO_InitStruct{};
     UART_HandleTypeDef USART_InitStruct{};
 
@@ -74,6 +76,8 @@ void BusInit() {
     // TODO: Timeout is implemented in BusUpdate() function.
     LL_USART_ConfigAsyncMode(USART_CHANNEL);
     LL_USART_Enable(USART_CHANNEL);
+
+    turn_smartled_on();
 }
 
 void BusDeinit() {
