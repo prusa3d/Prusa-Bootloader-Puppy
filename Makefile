@@ -35,6 +35,7 @@ HALSRC        += stm32-h5hal/startup_stm32h503cbux.s
 endif
 
 ifeq ($(ARCH),stm32-f4hal)
+HALSRC		  += stm32f4xx_hal_driver/Src/stm32f4xx_hal_gpio.c
 HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_cortex.c
 HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_rcc.c
 HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_hal_uart.c
@@ -48,7 +49,7 @@ HALSRC        += stm32f4xx_hal_driver/Src/stm32f4xx_ll_utils.c
 HALSRC        += stm32-f4hal/system_stm32f4xx.c
 HALSRC        += stm32-f4hal/startup_stm32f427xx.s
 HALSRC		  += stm32-f4hal/setup_stdout.c
-
+HALSRC		  += stm32-f4hal/Gpio.c
 endif
 
 OBJ            = $(CPPSRC:.cpp=.o)
