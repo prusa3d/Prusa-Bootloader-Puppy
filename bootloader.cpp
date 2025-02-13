@@ -134,16 +134,17 @@ static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len
 
 	if(address == 0) {
 		// Erase the application flash area
+		// Note: Depends on the port if this is needed
 		if (SelfProgram::eraseApplicationFlash() != 0) {
 			dataout[0] = 1;
 			return cmd_result(Status::COMMAND_FAILED, 1);
 		}
 	}
 
-	if (address % sizeof(writeBuffer) == 0)
+	// This guarantees that writes are aligned to the erase page size(==sizeof(writeBuffer))
+	if (address % sizeof(writeBuffer) == 0 && nextWriteAddress % sizeof(writeBuffer) == 0)
 		nextWriteAddress = address;
 
-	// Only consecutive writes are supported
 	if (address != nextWriteAddress)
 		return cmd_result(Status::INVALID_ARGUMENTS);
 
