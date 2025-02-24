@@ -9,11 +9,6 @@ bool SelfProgram::appFwFingerprintValid = false;
 unsigned char SelfProgram::appFwFingerprint[32] = {0};
 uint32_t SelfProgram::appFwFingerprintSalt = 0;
 
-// Make it weak so it can be overridden
-__attribute__((weak)) uint8_t SelfProgram::eraseApplicationFlash() {
-    return 0;
-}
-
 void SelfProgram::readFlash(uint32_t address, uint8_t *data, uint16_t len) {
 	for (uint8_t i=0; i < len; i++) {
 		data[i] = readByte(address + i);

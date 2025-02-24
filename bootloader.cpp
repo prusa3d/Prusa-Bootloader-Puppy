@@ -132,9 +132,12 @@ static uint8_t commitToFlash(uint32_t address, uint16_t len) {
 
 static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len, uint8_t *dataout) {
 
+#ifdef STM32F4
+	// Anyone using STM32F427 or similar will want to avoid writing full 2MB- 16kB of flash. This allows
+	// non-contiguous writes to the flash, but it's necessary to erase the application flash first!
+	// Erasing whole application flash takes some time(~30s) but after that, the writes are fast.
 	if(address == 0) {
 		// Erase the application flash area
-		// Note: Depends on the port if this is needed
 		if (SelfProgram::eraseApplicationFlash() != 0) {
 			dataout[0] = 1;
 			return cmd_result(Status::COMMAND_FAILED, 1);
@@ -144,6 +147,12 @@ static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len
 	// This guarantees that writes are aligned to the erase page size(==sizeof(writeBuffer))
 	if (address % sizeof(writeBuffer) == 0 && nextWriteAddress % sizeof(writeBuffer) == 0)
 		nextWriteAddress = address;
+#else
+	// Only consecutive writes are supported
+	if(address == 0) {
+		nextWriteAddress = address;
+	}
+#endif // STM32F4
 
 	if (address != nextWriteAddress)
 		return cmd_result(Status::INVALID_ARGUMENTS);
