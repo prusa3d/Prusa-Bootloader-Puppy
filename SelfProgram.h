@@ -27,11 +27,11 @@ class SelfProgram {
 public:
 
 	/**
-	 * @brief Erase the application flash area
+	 * @brief Erase the whole application flash area
 	 *
 	 * Called before writing the application to ensure that the flash is empty.
 	 *
-	 * __weak default implementation does nothing. Override if required.
+	 * Implementation is required only if used.
 	 *
 	 * @return 0 on success, 1 on failure
 	 */
