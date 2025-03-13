@@ -145,7 +145,7 @@ static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len
 	}
 
 	// This guarantees that writes are aligned to the erase page size(==sizeof(writeBuffer))
-	if (address % sizeof(writeBuffer) == 0 && nextWriteAddress % sizeof(writeBuffer) == 0)
+	if (address % sizeof(writeBuffer) == 0)
 		nextWriteAddress = address;
 #else
 	// Only consecutive writes are supported
