@@ -96,7 +96,13 @@
   *        (when HSE is used as system clock source, directly or through the PLL).
   */
 #if !defined  (HSE_VALUE)
-  #define HSE_VALUE    12000000U /*!< Value of the External oscillator in Hz */
+  #if defined(BOARD_TYPE_prusa_baseboard10)
+      #define HSE_VALUE    12000000U /*!< Value of the External oscillator in Hz */
+  #elif defined(BOARD_TYPE_prusa_smartled01)
+      #define HSE_VALUE    24000000U
+  #else
+      #error "Undefined external oscillator value"
+  #endif
 #endif /* HSE_VALUE */
 
 #if !defined  (HSE_STARTUP_TIMEOUT)
