@@ -46,6 +46,10 @@
     const uint8_t INFO_HW_TYPE = 51;
     const uint16_t MAX_PACKET_LENGTH = 255;
     #define NEEDS_ADDRESS_CHANGE 0
+#elif defined(BOARD_TYPE_prusa_smartled01)
+    const uint8_t INFO_HW_TYPE = 52;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+    #define NEEDS_ADDRESS_CHANGE 0
 #else
 	#error "No board type defined"
 #endif

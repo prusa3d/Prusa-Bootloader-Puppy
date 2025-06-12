@@ -12,6 +12,16 @@
 #include "stm32f4xx_hal_flash.h"
 #include "stm32f4xx_hal_flash_ex.h"
 
+#if defined(BOARD_TYPE_prusa_baseboard10)
+    #define OSC_INIT_RCC_PLLM 6
+    #define CLK_INIT_APB2CLKDivider RCC_HCLK_DIV4
+#elif defined(BOARD_TYPE_prusa_smartled01)
+    #define OSC_INIT_RCC_PLLM 12
+    #define CLK_INIT_APB2CLKDivider RCC_HCLK_DIV2
+#else
+    #error "Undefined clock config"
+#endif
+
 void ClockInit() {
     RCC_OscInitTypeDef RCC_OscInitStruct = {0};
     RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
@@ -28,7 +38,7 @@ void ClockInit() {
     RCC_OscInitStruct.HSEState = RCC_HSE_ON;
     RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
     RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-    RCC_OscInitStruct.PLL.PLLM = 6;
+    RCC_OscInitStruct.PLL.PLLM = OSC_INIT_RCC_PLLM;
     RCC_OscInitStruct.PLL.PLLN = 168;
     RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
     RCC_OscInitStruct.PLL.PLLQ = 7;
@@ -44,7 +54,7 @@ void ClockInit() {
     RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
     RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
     RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-    RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV4;
+    RCC_ClkInitStruct.APB2CLKDivider = CLK_INIT_APB2CLKDivider;
 
     if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
     {
