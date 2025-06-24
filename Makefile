@@ -168,7 +168,7 @@ ifeq ($(ARCH),stm32-f4hal)
     CXXFLAGS          += -DUSE_FULL_LL_DRIVER
     ifeq ($(BOARD_TYPE), prusa_smartled01)
         CXXFLAGS      += -DFIXED_ADDRESS=3
-    else ($(BOARD_TYPE), prusa_baseboard10)
+    else ifeq ($(BOARD_TYPE), prusa_baseboard10)
         CXXFLAGS      += -DFIXED_ADDRESS=2
 	else
 		$(error unknown f4 board")
