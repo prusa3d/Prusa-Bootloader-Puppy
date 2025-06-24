@@ -2,6 +2,9 @@
 
 #include "stm32f4xx.h"
 #include "stm32f4xx_hal_gpio.h"
+#include <stdint.h>
+
+extern uint8_t info_hw_type;
 
 void gpio_init() {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -41,6 +44,42 @@ void gpio_init() {
         GPIO_InitStruct.Pull = GPIO_NOPULL;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
         HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+
+        // ID pins for baseboard variants
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Pin = D_SLX_ID_Pin;
+        HAL_GPIO_Init(D_SLX_ID_GPIO_Port, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Pin = D_CX_ID_Pin;
+        HAL_GPIO_Init(D_CX_ID_GPIO_Port, &GPIO_InitStruct);
+
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Pin = D_WX_ID_Pin;
+        HAL_GPIO_Init(D_WX_ID_GPIO_Port, &GPIO_InitStruct);
+
+        // Determine the baseboard type based on ID pins
+        GPIO_PinState is_slx = HAL_GPIO_ReadPin(D_SLX_ID_GPIO_Port, D_SLX_ID_Pin);
+        GPIO_PinState is_cx = HAL_GPIO_ReadPin(D_CX_ID_GPIO_Port, D_CX_ID_Pin);
+        GPIO_PinState is_wx = HAL_GPIO_ReadPin(D_WX_ID_GPIO_Port, D_WX_ID_Pin);
+
+        if (is_slx == GPIO_PIN_RESET) {
+            info_hw_type = 53; // Baseboard SLX variant
+        } else if (is_cx == GPIO_PIN_RESET) {
+            info_hw_type = 54; // Baseboard CX variant
+        } else if (is_wx == GPIO_PIN_RESET) {
+            info_hw_type = 55; // Baseboard WX variant
+        } else {
+            info_hw_type = 51; // Baseboard unknown, use default
+        }
+
+
 
     #elif defined(BOARD_TYPE_prusa_smartled01)
         HAL_GPIO_WritePin(GPIOB, D_LED_EN_Pin, GPIO_PIN_RESET);

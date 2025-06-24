@@ -50,7 +50,8 @@
     // - 53 for Baseboard SLX variant,
     // - 54 for CX variant and
     // - 55 for WX variant of baseboard
-    const uint8_t INFO_HW_TYPE = 50;
+    // - 51 left for old baseboard10(obsolete) with no ID pins grounded.
+    const uint8_t INFO_HW_TYPE = 51;
     const uint16_t MAX_PACKET_LENGTH = 255;
     #define NEEDS_ADDRESS_CHANGE 0
 #elif defined(BOARD_TYPE_prusa_smartled01)
