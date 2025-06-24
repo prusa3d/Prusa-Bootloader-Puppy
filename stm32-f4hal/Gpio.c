@@ -17,7 +17,7 @@ void gpio_init() {
     __HAL_RCC_GPIOD_CLK_ENABLE();
 
     /*Configure GPIO pin Output Level */
-    #if defined(BOARD_TYPE_prusa_baseboard10)
+    #if defined(BOARD_TYPE_prusa_baseboard)
         HAL_GPIO_WritePin(GPIOG, D_MCU_PWR_EN_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOG, D_LED_POWER_EN_Pin, GPIO_PIN_RESET);
         HAL_GPIO_WritePin(GPIOB, D_LED_EN_Pin, GPIO_PIN_RESET);
@@ -63,7 +63,7 @@ void gpio_init() {
     #endif
 }
 
-#if defined(BOARD_TYPE_prusa_baseboard10)
+#if defined(BOARD_TYPE_prusa_baseboard)
     void reset_fellow_slaves() {
         HAL_GPIO_WritePin(D_SECOND_RESET_GPIO_Port, D_SECOND_RESET_Pin, GPIO_PIN_SET);
         HAL_GPIO_WritePin(D_LED_RESET_GPIO_Port, 	D_LED_RESET_Pin, 	GPIO_PIN_SET);

@@ -14,7 +14,7 @@
 #include <cstring>
 #include <cassert>
 
-#if defined(BOARD_TYPE_prusa_baseboard10)
+#if defined(BOARD_TYPE_prusa_baseboard)
     #include "Gpio.h"
     #define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_4
     #define D_RS485_FLOW_CONTROL_GPIO_Port GPIOD
@@ -90,7 +90,7 @@ void BusInit() {
     LL_USART_ConfigAsyncMode(USART_CHANNEL);
     LL_USART_Enable(USART_CHANNEL);
 
-    #if defined(BOARD_TYPE_prusa_baseboard10)
+    #if defined(BOARD_TYPE_prusa_baseboard)
         turn_smartled_on();
     #endif
 }

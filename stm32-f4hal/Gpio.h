@@ -3,7 +3,7 @@
 #include "stm32f4xx_hal_gpio.h"
 
 
-#if defined(BOARD_TYPE_prusa_baseboard10)
+#if defined(BOARD_TYPE_prusa_baseboard)
     #define D_MCU_PWR_EN_Pin GPIO_PIN_0
     #define D_MCU_PWR_EN_GPIO_Port GPIOG
     #define D_LED_POWER_EN_Pin GPIO_PIN_1
@@ -38,7 +38,7 @@
 extern "C" {
 #endif
 void gpio_init();
-#if defined(BOARD_TYPE_prusa_baseboard10)
+#if defined(BOARD_TYPE_prusa_baseboard)
     void reset_fellow_slaves();
     void turn_smartled_on();
 #endif
