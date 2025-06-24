@@ -23,11 +23,11 @@
     #define D_P5V_PWR_EN_GPIO_Port GPIOA // ON! (or blinking?)
     #define D_LED_EN_Pin GPIO_PIN_15
     #define D_LED_EN_GPIO_Port GPIOB // OFF!
-    /* 
+    /*
      * TODO (Nemec): Add fans to be turned on during bootup!
      * FAN1
      * FAN2
-    */ 
+    */
 #else
     #error "Undefined pin definitopm"
 #endif
