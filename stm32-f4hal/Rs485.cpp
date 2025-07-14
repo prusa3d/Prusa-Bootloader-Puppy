@@ -89,10 +89,6 @@ void BusInit() {
     // TODO: Timeout is implemented in BusUpdate() function.
     LL_USART_ConfigAsyncMode(USART_CHANNEL);
     LL_USART_Enable(USART_CHANNEL);
-
-    #if defined(BOARD_TYPE_prusa_baseboard)
-        turn_smartled_on();
-    #endif
 }
 
 void BusDeinit() {
