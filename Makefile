@@ -166,7 +166,13 @@ ifeq ($(ARCH),stm32-f4hal)
     CXXFLAGS          += -DSTM32F4
     CXXFLAGS          += -DUSE_HAL_DRIVER
     CXXFLAGS          += -DUSE_FULL_LL_DRIVER
-    CXXFLAGS          += -DFIXED_ADDRESS=2
+    ifeq ($(BOARD_TYPE), prusa_smartled01)
+        CXXFLAGS      += -DFIXED_ADDRESS=3
+    else ifeq ($(BOARD_TYPE), prusa_baseboard10)
+        CXXFLAGS      += -DFIXED_ADDRESS=2
+	else
+		$(error unknown f4 board")
+    endif
     CXXFLAGS          += -DBL_SIZE=$(BL_SIZE)
     CXXFLAGS          += -flto -ffat-lto-objects
 endif
@@ -271,7 +277,7 @@ endif
 # hw revisions without needing an explicit clean in between.
 .INTERMEDIATE: $(OBJ) $(EXTRA_OBJ)
 
-all: dwarf modularbed xbuddy_extension prusa_baseboard10
+all: dwarf modularbed xbuddy_extension prusa_baseboard10 prusa_smartled01
 
 dwarf:
 	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
@@ -293,6 +299,9 @@ xbuddy_extension_debug:
 
 baseboard10:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_baseboard10 CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+smartled01:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_smartled01 CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 firmware: hex fuses size checksize
 
 hex: $(FILE_NAME).hex
