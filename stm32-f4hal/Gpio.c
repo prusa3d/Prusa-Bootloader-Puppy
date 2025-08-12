@@ -2,6 +2,9 @@
 
 #include "stm32f4xx.h"
 #include "stm32f4xx_hal_gpio.h"
+#include <stdint.h>
+
+extern uint8_t info_hw_type;
 
 void gpio_init() {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -17,30 +20,42 @@ void gpio_init() {
     __HAL_RCC_GPIOD_CLK_ENABLE();
 
     /*Configure GPIO pin Output Level */
-    #if defined(BOARD_TYPE_prusa_baseboard10)
-        HAL_GPIO_WritePin(GPIOG, D_MCU_PWR_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOG, D_LED_POWER_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOB, D_LED_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOB, D_POWER_OUT_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(GPIOF, D_EXT_2_Pin, GPIO_PIN_RESET);
-
-        GPIO_InitStruct.Pin = D_MCU_PWR_EN_Pin | D_LED_POWER_EN_Pin | D_SECOND_RESET_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
+    #if defined(BOARD_TYPE_prusa_baseboard)
+        // ID pins for baseboard variants
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
+        GPIO_InitStruct.Pin = D_SLX_ID_Pin;
+        HAL_GPIO_Init(D_SLX_ID_GPIO_Port, &GPIO_InitStruct);
 
-        GPIO_InitStruct.Pin = D_LED_EN_Pin | D_POWER_OUT_EN_Pin | D_LED_RESET_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+        GPIO_InitStruct.Pin = D_CX_ID_Pin;
+        HAL_GPIO_Init(D_CX_ID_GPIO_Port, &GPIO_InitStruct);
 
-        GPIO_InitStruct.Pin = D_EXT_2_Pin;
-        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+        GPIO_InitStruct.Pull = GPIO_PULLUP;
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-        HAL_GPIO_Init(GPIOF, &GPIO_InitStruct);
+        GPIO_InitStruct.Pin = D_WX_ID_Pin;
+        HAL_GPIO_Init(D_WX_ID_GPIO_Port, &GPIO_InitStruct);
+
+        // Determine the baseboard type based on ID pins
+        GPIO_PinState is_slx = HAL_GPIO_ReadPin(D_SLX_ID_GPIO_Port, D_SLX_ID_Pin);
+        GPIO_PinState is_cx = HAL_GPIO_ReadPin(D_CX_ID_GPIO_Port, D_CX_ID_Pin);
+        GPIO_PinState is_wx = HAL_GPIO_ReadPin(D_WX_ID_GPIO_Port, D_WX_ID_Pin);
+
+        if (is_slx == GPIO_PIN_RESET) {
+            info_hw_type = 53; // Baseboard SLX variant
+        } else if (is_cx == GPIO_PIN_RESET) {
+            info_hw_type = 54; // Baseboard CX variant
+        } else if (is_wx == GPIO_PIN_RESET) {
+            info_hw_type = 55; // Baseboard WX variant
+        } else {
+            info_hw_type = 51; // Baseboard unknown, use default
+        }
+
+
 
     #elif defined(BOARD_TYPE_prusa_smartled01)
         HAL_GPIO_WritePin(GPIOB, D_LED_EN_Pin, GPIO_PIN_RESET);
@@ -62,22 +77,3 @@ void gpio_init() {
 
     #endif
 }
-
-#if defined(BOARD_TYPE_prusa_baseboard10)
-    void reset_fellow_slaves() {
-        HAL_GPIO_WritePin(D_SECOND_RESET_GPIO_Port, D_SECOND_RESET_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(D_LED_RESET_GPIO_Port, 	D_LED_RESET_Pin, 	GPIO_PIN_SET);
-        HAL_Delay(100);
-        HAL_GPIO_WritePin(D_SECOND_RESET_GPIO_Port, D_SECOND_RESET_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(D_LED_RESET_GPIO_Port, 	D_LED_RESET_Pin, 	GPIO_PIN_RESET);
-    }
-
-    void turn_smartled_on() {
-        HAL_GPIO_WritePin(D_MCU_PWR_EN_GPIO_Port, D_MCU_PWR_EN_Pin, GPIO_PIN_RESET);
-        HAL_GPIO_WritePin(D_LED_EN_GPIO_Port, D_LED_EN_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(D_LED_POWER_EN_GPIO_Port, D_LED_POWER_EN_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(D_POWER_OUT_EN_GPIO_Port, D_POWER_OUT_EN_Pin, GPIO_PIN_SET);
-        HAL_GPIO_WritePin(D_EXT_2_GPIO_Port, D_EXT_2_Pin, GPIO_PIN_RESET);
-        reset_fellow_slaves();
-    }
-#endif

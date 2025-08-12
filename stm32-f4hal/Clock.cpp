@@ -12,7 +12,7 @@
 #include "stm32f4xx_hal_flash.h"
 #include "stm32f4xx_hal_flash_ex.h"
 
-#if defined(BOARD_TYPE_prusa_baseboard10)
+#if defined(BOARD_TYPE_prusa_baseboard)
     #define OSC_INIT_RCC_PLLM 6
     #define CLK_INIT_APB2CLKDivider RCC_HCLK_DIV4
 #elif defined(BOARD_TYPE_prusa_smartled01)

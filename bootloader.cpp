@@ -68,6 +68,8 @@ constexpr const struct VersionInfoInFlash version_info __attribute__((__section_
 	BL_VERSION,
 };
 
+uint8_t info_hw_type{INFO_HW_TYPE};
+
 struct __attribute__((packed)) ApplicationStartupArguments {
     uint8_t modbus_address;
 };
@@ -247,7 +249,7 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 
 			// Type 42 dwarf or type 43 modular bed
 			static_assert(sizeof(INFO_HW_TYPE) == sizeof(uint8_t), "INFO_HW_TYPE won't fit to 1 byte!");
-			dataout[0] = INFO_HW_TYPE;
+			dataout[0] = info_hw_type;  // Might be changed at runtime(prusa_baseboard) to reflect the actual board type(determined by resistors on GPIO pins)
 
 			// Hardware revision
 			uint16_t hardware_revision = get_revision();
