@@ -3,6 +3,9 @@
 #include "stm32f4xx_hal_gpio.h"
 
 #if defined(BOARD_TYPE_prusa_baseboard)
+    // UV LED
+    #define D_UV_LED_ENABLE_Port GPIOD
+    #define D_UV_LED_ENABLE_Pin GPIO_PIN_2
     // ID pins for baseboard variants
     #define D_SLX_ID_GPIO_Port GPIOA
     #define D_SLX_ID_Pin GPIO_PIN_12

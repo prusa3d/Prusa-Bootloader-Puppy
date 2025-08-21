@@ -21,6 +21,13 @@ void gpio_init() {
 
     /*Configure GPIO pin Output Level */
     #if defined(BOARD_TYPE_prusa_baseboard)
+
+        GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+        GPIO_InitStruct.Pull = GPIO_NOPULL;
+        GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+        GPIO_InitStruct.Pin = D_UV_LED_ENABLE_Pin;
+        HAL_GPIO_Init(D_UV_LED_ENABLE_Port, &GPIO_InitStruct);
+
         // ID pins for baseboard variants
         GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
         GPIO_InitStruct.Pull = GPIO_PULLUP;
@@ -39,6 +46,8 @@ void gpio_init() {
         GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
         GPIO_InitStruct.Pin = D_WX_ID_Pin;
         HAL_GPIO_Init(D_WX_ID_GPIO_Port, &GPIO_InitStruct);
+
+        HAL_GPIO_WritePin(D_UV_LED_ENABLE_Port, D_UV_LED_ENABLE_Pin, GPIO_PIN_RESET); // Turn off UV LED by default
 
         // Determine the baseboard type based on ID pins
         GPIO_PinState is_slx = HAL_GPIO_ReadPin(D_SLX_ID_GPIO_Port, D_SLX_ID_Pin);
