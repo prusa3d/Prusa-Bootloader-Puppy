@@ -298,9 +298,15 @@ xbuddy_extension_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 smartled01:
+	$(MAKE) firmware ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_smartled01 CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+smartled01_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_smartled01 CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 baseboard:
+	$(MAKE) firmware ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_baseboard CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+baseboard_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-f4hal BUS=Rs485 BOARD_TYPE=prusa_baseboard CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 firmware: hex fuses size checksize
