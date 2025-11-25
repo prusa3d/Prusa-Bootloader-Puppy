@@ -2,19 +2,33 @@
 #include "BaseProtocol.h"
 #include "Config.h"
 
+#if defined(STM32H5)
 #include <stm32h5xx_hal.h>
 #include <stm32h5xx_ll_gpio.h>
 #include <stm32h5xx_ll_usart.h>
 #include <stm32h5xx_ll_rcc.h>
 #include <stm32h5xx_ll_bus.h>
+#elif defined(STM32C0)
+#include <stm32c0xx_hal.h>
+#include <stm32c0xx_ll_gpio.h>
+#include <stm32c0xx_ll_usart.h>
+#include <stm32c0xx_ll_rcc.h>
+#include <stm32c0xx_ll_bus.h>
+#else
+#error
+#endif
 
 #include <cstdint>
 #include <cstring>
 
-#if BOARD_TYPE == prusa_xbuddy_extension
+#if defined(BOARD_TYPE_prusa_xbuddy_extension)
 #define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_14
 #define D_RS485_FLOW_CONTROL_GPIO_Port GPIOB
 #define USART_CHANNEL USART3
+#elif defined(BOARD_TYPE_prusa_indx_head)
+#define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_9
+#define D_RS485_FLOW_CONTROL_GPIO_Port GPIOB
+#define USART_CHANNEL USART2
 #else
 #error "Undefined modbus channel and flow control gpio"
 #endif
@@ -23,23 +37,44 @@ void BusInit() {
     LL_GPIO_InitTypeDef GPIO_InitStruct{};
     LL_USART_InitTypeDef USART_InitStruct{};
 
+#if defined(STM32H5)
     LL_RCC_SetUSARTClockSource(LL_RCC_USART3_CLKSOURCE_PCLK1);
 
     /* Peripheral clock enable */
     LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_USART3);
-
     LL_AHB2_GRP1_EnableClock(LL_AHB2_GRP1_PERIPH_GPIOB);
+#elif defined(STM32C0)
+    LL_APB1_GRP1_EnableClock(LL_APB1_GRP1_PERIPH_USART2);
 
+    LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOB);
+    LL_IOP_GRP1_EnableClock(LL_IOP_GRP1_PERIPH_GPIOA);
+#else
+#error
+#endif
+
+
+#if defined(BOARD_TYPE_prusa_xbuddy_extension)
     /**USART3 GPIO Configuration
     PB7   ------> USART3_TX
     PB8   ------> USART3_RX
     */
     GPIO_InitStruct.Pin = LL_GPIO_PIN_7 | LL_GPIO_PIN_8;
+    GPIO_InitStruct.Alternate = LL_GPIO_AF_13;
+#elif defined(BOARD_TYPE_prusa_indx_head)
+    /**USART2 GPIO Configuration
+    PB9   ------> USART2_DE
+    PA2   ------> USART2_TX
+    PA3   ------> USART2_RX
+    */
+    GPIO_InitStruct.Pin = LL_GPIO_PIN_7 | LL_GPIO_PIN_8;
+    GPIO_InitStruct.Alternate = LL_GPIO_AF_1;
+#else
+#error
+#endif
     GPIO_InitStruct.Mode = LL_GPIO_MODE_ALTERNATE;
     GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
     GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-    GPIO_InitStruct.Alternate = LL_GPIO_AF_13;
     LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     memset(&GPIO_InitStruct, 0, sizeof(GPIO_InitStruct));
@@ -73,8 +108,8 @@ void BusInit() {
     LL_USART_Enable(USART_CHANNEL);
 
     // We want to enable auto baud rate detection, since testers are unable to run on 230 400
-    LL_USART_SetAutoBaudRateMode(USART_CHANNEL, LL_USART_AUTOBAUD_DETECT_ON_STARTBIT);
-    LL_USART_EnableAutoBaudRate(USART_CHANNEL);
+    // LL_USART_SetAutoBaudRateMode(USART_CHANNEL, LL_USART_AUTOBAUD_DETECT_ON_STARTBIT);
+    // LL_USART_EnableAutoBaudRate(USART_CHANNEL);
 }
 
 void BusDeinit() {

@@ -41,6 +41,9 @@
 #elif defined(BOARD_TYPE_prusa_xbuddy_extension)
 	const uint8_t INFO_HW_TYPE = 44;
     const uint16_t MAX_PACKET_LENGTH = 255;
+#elif defined(BOARD_TYPE_prusa_indx_head)
+	const uint8_t INFO_HW_TYPE = 45;
+    const uint16_t MAX_PACKET_LENGTH = 255;
 #else
 	#error "No board type defined"
 #endif

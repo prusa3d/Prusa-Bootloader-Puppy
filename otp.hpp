@@ -3,7 +3,7 @@
 #include <cstdint>
 
 // OTP area
-#if defined(STM32G0)
+#if defined(STM32G0) || defined(STM32C0)
 static constexpr uint32_t OTP_START_ADDR = 0x1FFF7000UL;
 static constexpr uint32_t OTP_SIZE = 1024;
 #elif defined(STM32H5)

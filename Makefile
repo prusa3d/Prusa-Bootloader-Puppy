@@ -17,11 +17,10 @@
 PROTOCOL_VERSION = 0x0302
 
 CPPSRC         = $(wildcard *.cpp)
-CPPSRC        += $(ARCH)/SelfProgram.cpp $(ARCH)/uart.cpp $(ARCH)/Reset.cpp $(ARCH)/Clock.cpp
-CPPSRC        += $(ARCH)/$(BUS).cpp
-CPPSRC        += $(ARCH)/power_panic.cpp $(ARCH)/fan.cpp $(ARCH)/iwdg.cpp $(ARCH)/otp.cpp
+CPPSRC        += $(wildcard $(ARCH)/*.cpp)
 HALSRC         =
 ifeq ($(ARCH),stm32-h5hal)
+CPPSRC        += $(wildcard stm32-common/*.cpp)
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_cortex.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash_ex.c
@@ -32,6 +31,22 @@ HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_gpio.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_utils.c
 HALSRC        += stm32-h5hal/system_stm32h5xx.c
 HALSRC        += stm32-h5hal/startup_stm32h503cbux.s
+else ifeq ($(ARCH),stm32-c0hal)
+CPPSRC        += $(wildcard stm32-common/*.cpp)
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_cortex.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash_ex.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_gpio.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_rcc.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_rcc.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_usart.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_gpio.c
+HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_utils.c
+HALSRC        += stm32-c0hal/system_stm32c0xx.c
+HALSRC        += stm32-c0hal/startup_stm32c092xx.s
+$(info C++ source files: $(CPPSRC))
+$(info HAL source files: $(HALSRC))
 endif
 OBJ            = $(CPPSRC:.cpp=.o)
 EXTRA_OBJ_1    = $(HALSRC:.c=.o)
@@ -77,6 +92,20 @@ FLASH_APP_OFFSET    = $(BL_SIZE)
 APPLICATION_SIZE    = (128*1024-FLASH_APP_OFFSET)
 # there is 128 bytes of FW descriptor at the end of app space
 FW_DESCRIPTOR_SIZE = 128
+else ifeq ($(ARCH),stm32-c0hal)
+LDSCRIPT            = stm32-c0hal/stm32c092kcux.ld
+FLASH_WRITE_SIZE    = 256
+FLASH_ERASE_SIZE    = 2048
+
+BL_SIZE             = 8192
+BL_OFFSET           = 0
+
+# Bootloader is at the start of flash, so write app after it
+FLASH_APP_OFFSET    = $(BL_SIZE)
+# actual flash size is 256kb, but we are currently limited to application size of 64kb due offset being uint16
+APPLICATION_SIZE    = (256*1024-FLASH_APP_OFFSET)
+# there is 128 bytes of FW descriptor at the end of app space
+FW_DESCRIPTOR_SIZE = 128
 endif
 
 VERSION_SIZE   = 7
@@ -107,6 +136,7 @@ CXXFLAGS      += -fno-exceptions
 
 CXXFLAGS      += -I$(ARCH) -I.
 ifeq ($(ARCH),stm32-h5hal)
+CXXFLAGS      += -Istm32-common
 CXXFLAGS      += -Istm32h5xx_hal_driver/Inc
 CXXFLAGS	  += -Istm32-h5hal/CMSIS/Device/ST/STM32H5xx/Include
 CXXFLAGS	  += -Istm32-h5hal/CMSIS/Include
@@ -118,6 +148,21 @@ CXXFLAGS	  += -DSTM32H5
 CXXFLAGS	  += -DUSE_HAL_DRIVER
 CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
 CXXFLAGS	  += -DFIXED_ADDRESS=17 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
+
+CXXFLAGS      += -flto -ffat-lto-objects
+else ifeq ($(ARCH),stm32-c0hal)
+CXXFLAGS      += -Istm32-common
+CXXFLAGS      += -Istm32c0xx-hal-driver/Inc
+CXXFLAGS	  += -Istm32-c0hal/CMSIS/Device/ST/STM32C0xx/Include
+CXXFLAGS	  += -Istm32-c0hal/CMSIS/Include
+
+CXXFLAGS      += -mcpu=cortex-m0plus
+
+CXXFLAGS	  += -DSTM32C092xx
+CXXFLAGS	  += -DSTM32C0
+CXXFLAGS	  += -DUSE_HAL_DRIVER
+CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
+CXXFLAGS	  += -DFIXED_ADDRESS=18 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
 
 CXXFLAGS      += -flto -ffat-lto-objects
 endif
@@ -177,6 +222,16 @@ CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
 LDFLAGS       += -nostartfiles
 LDFLAGS       += -specs=nano.specs
 LDFLAGS       += -specs=nosys.specs
+else ifeq ($(ARCH),stm32-c0hal)
+PREFIX         = arm-none-eabi-
+SIZE_FORMAT    = berkely
+
+CXXFLAGS      += -DSTM32
+CXXFLAGS      += -DAPPLICATION_SIZE="($(APPLICATION_SIZE))"
+CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
+LDFLAGS       += -nostartfiles
+LDFLAGS       += -specs=nano.specs
+LDFLAGS       += -specs=nosys.specs
 endif
 
 CC             = $(PREFIX)gcc
@@ -222,6 +277,9 @@ modularbed:
 xbuddy_extension:
 	$(MAKE) firmware ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
+indx_head:
+	$(MAKE) firmware ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
 dwarf_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
@@ -230,6 +288,9 @@ modularbed_debug:
 
 xbuddy_extension_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+
+indx_head_debug:
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 firmware: hex fuses size checksize
 
@@ -251,6 +312,7 @@ size:
 clean:
 	$(MAKE) cleanarch ARCH=stm32-ocm3 BUS=Rs485
 	$(MAKE) cleanarch ARCH=stm32-h5hal BUS=RS485
+	$(MAKE) cleanarch ARCH=stm32-c0hal BUS=RS485
 
 cleanarch:
 	rm -rf $(OBJ) $(OBJ:.o=.d) $(EXTRA_OBJ) $(EXTRA_OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin

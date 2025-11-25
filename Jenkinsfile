@@ -49,6 +49,12 @@ pipeline {
                 sh "make xbuddy_extension"
             }
         }
+
+        stage("Build INDX Head") {
+            steps {
+                sh "make indx_head"
+            }
+        }
     }
 
     post {
