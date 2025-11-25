@@ -16,11 +16,20 @@
 # Major 0xff00, minor 0x00ff
 PROTOCOL_VERSION = 0x0302
 
+ifeq ($(ARCH),stm32-h5hal)
+	USES_STM_HAL = 1
+else ifeq ($(ARCH),stm32-c0hal)
+	USES_STM_HAL = 1
+else
+	USES_STM_HAL = 0
+endif
+
 CPPSRC         = $(wildcard *.cpp)
 CPPSRC        += $(wildcard $(ARCH)/*.cpp)
+CPPSRC        += $(wildcard $(ARCH)/*.c)
+CPPSRC        += $(wildcard $(ARCH)/*.s)
 HALSRC         =
 ifeq ($(ARCH),stm32-h5hal)
-CPPSRC        += $(wildcard stm32-common/*.cpp)
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_cortex.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_hal_flash_ex.c
@@ -29,10 +38,7 @@ HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_rcc.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_usart.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_gpio.c
 HALSRC        += stm32h5xx_hal_driver/Src/stm32h5xx_ll_utils.c
-HALSRC        += stm32-h5hal/system_stm32h5xx.c
-HALSRC        += stm32-h5hal/startup_stm32h503cbux.s
 else ifeq ($(ARCH),stm32-c0hal)
-CPPSRC        += $(wildcard stm32-common/*.cpp)
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_cortex.c
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash.c
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash_ex.c
@@ -43,14 +49,16 @@ HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_rcc.c
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_usart.c
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_gpio.c
 HALSRC        += stm32c0xx-hal-driver/Src/stm32c0xx_ll_utils.c
-HALSRC        += stm32-c0hal/system_stm32c0xx.c
-HALSRC        += stm32-c0hal/startup_stm32c092xx.s
-$(info C++ source files: $(CPPSRC))
-$(info HAL source files: $(HALSRC))
 endif
-OBJ            = $(CPPSRC:.cpp=.o)
-EXTRA_OBJ_1    = $(HALSRC:.c=.o)
-EXTRA_OBJ      = $(EXTRA_OBJ_1:.s=.o)
+ifeq ($(USES_STM_HAL),1)
+CPPSRC        += $(wildcard stm32-common/*.cpp)
+endif
+
+SOURCES        = $(CPPSRC) $(HALSRC)
+OBJ_TMP        = $(SOURCES:.cpp=.o)
+OBJ_TMP2       = $(OBJ_TMP:.c=.o)
+OBJ            = $(OBJ_TMP2:.s=.o)
+
 ifeq ($(ARCH),attiny)
 LDSCRIPT       = $(ARCH)/linker-script.x
 MCU            = attiny841
@@ -136,7 +144,6 @@ CXXFLAGS      += -fno-exceptions
 
 CXXFLAGS      += -I$(ARCH) -I.
 ifeq ($(ARCH),stm32-h5hal)
-CXXFLAGS      += -Istm32-common
 CXXFLAGS      += -Istm32h5xx_hal_driver/Inc
 CXXFLAGS	  += -Istm32-h5hal/CMSIS/Device/ST/STM32H5xx/Include
 CXXFLAGS	  += -Istm32-h5hal/CMSIS/Include
@@ -147,11 +154,9 @@ CXXFLAGS	  += -DSTM32H503xx
 CXXFLAGS	  += -DSTM32H5
 CXXFLAGS	  += -DUSE_HAL_DRIVER
 CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
-CXXFLAGS	  += -DFIXED_ADDRESS=17 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
 
 CXXFLAGS      += -flto -ffat-lto-objects
 else ifeq ($(ARCH),stm32-c0hal)
-CXXFLAGS      += -Istm32-common
 CXXFLAGS      += -Istm32c0xx-hal-driver/Inc
 CXXFLAGS	  += -Istm32-c0hal/CMSIS/Device/ST/STM32C0xx/Include
 CXXFLAGS	  += -Istm32-c0hal/CMSIS/Include
@@ -162,9 +167,23 @@ CXXFLAGS	  += -DSTM32C092xx
 CXXFLAGS	  += -DSTM32C0
 CXXFLAGS	  += -DUSE_HAL_DRIVER
 CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
-CXXFLAGS	  += -DFIXED_ADDRESS=18 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
 
 CXXFLAGS      += -flto -ffat-lto-objects
+endif
+
+ifeq ($(USES_STM_HAL),1)
+CXXFLAGS      += -Istm32-common
+endif
+
+ifeq ($(BOARD_TYPE),prusa_xbuddy_extension)
+CXXFLAGS	  += -DFIXED_ADDRESS=17 # it's 8th puppy (1 MB + 6 DW) and bootloader addresses are starting from 10
+else ifeq ($(BOARD_TYPE),prusa_indx_head)
+CXXFLAGS	  += -DFIXED_ADDRESS=18 # it's 9th puppy (1 MB + 6 DW + 1 XBE)
+endif
+
+ifeq ($(USES_STM_HAL),1)
+# This mutes the compilation warings from the HAL libraries
+CXXFLAGS      += -Wno-address-of-packed-member
 endif
 
 CXXFLAGS      += -DVERSION_SIZE=$(VERSION_SIZE)
@@ -266,7 +285,7 @@ endif
 # hw revisions without needing an explicit clean in between.
 .INTERMEDIATE: $(OBJ) $(EXTRA_OBJ)
 
-all: dwarf modularbed xbuddy_extension
+all: dwarf modularbed xbuddy_extension indx_head
 
 dwarf:
 	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
