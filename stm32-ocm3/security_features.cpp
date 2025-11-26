@@ -1,4 +1,4 @@
-#include "fan.hpp"
+#include "security_features.hpp"
 
 #include "Gpio.h"
 
@@ -11,3 +11,5 @@ void StartFan() {
     gpio_set(GPIOC, GPIO6);
 #endif
 }
+
+void DisableHeaters() {}
