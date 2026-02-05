@@ -27,6 +27,7 @@
 #include "crash_dump_shared.hpp"
 #include "otp.hpp"
 #include "power_panic.hpp"
+#include "rtt.hpp"
 #include "iwdg.hpp"
 #include "security_features.hpp"
 #include "Gpio.h"
@@ -345,6 +346,9 @@ extern "C" {
 	void runBootloader() {
 		ClockInit();
 		BusInit();
+
+		rtt::init();
+		rtt::print("started\n");
 
 		// Configure watchdog
 		WatchdogStart();
