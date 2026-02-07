@@ -54,6 +54,8 @@ void BusInit() {
 
 
 #if defined(BOARD_TYPE_prusa_xbuddy_extension)
+#define GPIO_PORT GPIOB
+#define HAS_RX_TIMEOUT_INTERUPT() 1
     /**USART3 GPIO Configuration
     PB7   ------> USART3_TX
     PB8   ------> USART3_RX
@@ -61,12 +63,13 @@ void BusInit() {
     GPIO_InitStruct.Pin = LL_GPIO_PIN_7 | LL_GPIO_PIN_8;
     GPIO_InitStruct.Alternate = LL_GPIO_AF_13;
 #elif defined(BOARD_TYPE_prusa_indx_head)
+#define GPIO_PORT GPIOA
+#define HAS_RX_TIMEOUT_INTERUPT() 0
     /**USART2 GPIO Configuration
-    PB9   ------> USART2_DE
     PA2   ------> USART2_TX
     PA3   ------> USART2_RX
     */
-    GPIO_InitStruct.Pin = LL_GPIO_PIN_7 | LL_GPIO_PIN_8;
+    GPIO_InitStruct.Pin = LL_GPIO_PIN_2 | LL_GPIO_PIN_3;
     GPIO_InitStruct.Alternate = LL_GPIO_AF_1;
 #else
 #error
@@ -75,7 +78,8 @@ void BusInit() {
     GPIO_InitStruct.Speed = LL_GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.OutputType = LL_GPIO_OUTPUT_PUSHPULL;
     GPIO_InitStruct.Pull = LL_GPIO_PULL_NO;
-    LL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    LL_GPIO_Init(GPIO_PORT, &GPIO_InitStruct);
+#undef GPIO_PORT
 
     memset(&GPIO_InitStruct, 0, sizeof(GPIO_InitStruct));
 
@@ -99,13 +103,18 @@ void BusInit() {
     LL_USART_Init(USART_CHANNEL, &USART_InitStruct);
     LL_USART_SetTXFIFOThreshold(USART_CHANNEL, LL_USART_FIFOTHRESHOLD_1_8);
     LL_USART_SetRXFIFOThreshold(USART_CHANNEL, LL_USART_FIFOTHRESHOLD_1_8);
+#if HAS_RX_TIMEOUT_INTERUPT()
     LL_USART_SetRxTimeout(USART_CHANNEL, 35); // Acording to modbus spec you should wait 3.5 characters 
                                               // after sending a message (and also before). We are sending
                                               // 10 bits per byte, so we wait for 35 bits before timeout.
     LL_USART_EnableRxTimeout(USART_CHANNEL);
+#endif
     LL_USART_DisableFIFO(USART_CHANNEL);
     LL_USART_ConfigAsyncMode(USART_CHANNEL);
     LL_USART_Enable(USART_CHANNEL);
+
+    while (!LL_USART_IsActiveFlag_TEACK(USART_CHANNEL) || !LL_USART_IsActiveFlag_REACK(USART_CHANNEL)) { }
+
 
     // We want to enable auto baud rate detection, since testers are unable to run on 230 400
     // LL_USART_SetAutoBaudRateMode(USART_CHANNEL, LL_USART_AUTOBAUD_DETECT_ON_STARTBIT);
@@ -123,42 +132,70 @@ static uint8_t busTxPos = 0;
 static uint8_t busAddress = 0;
 static_assert(MAX_PACKET_LENGTH < (1 << (sizeof(busBufferLen) * 8)), "Code needs changes for bigger packets");
 
-enum State {
-	StateIdle,
-	StateRead,
-	StateWrite
-};
-
-static State busState = StateIdle;
-
 static bool matchAddress(uint8_t address) {
 	return address == getConfiguredAddress();
 }
 
-bool BusUpdate() {
-    if (LL_USART_IsActiveFlag_TXE(USART_CHANNEL) && busState == StateWrite) {
-        LL_USART_SetTransferDirection(USART_CHANNEL, LL_USART_DIRECTION_TX); // Disable receiver during writing
-        LL_GPIO_SetOutputPin(D_RS485_FLOW_CONTROL_GPIO_Port, D_RS485_FLOW_CONTROL_Pin);
-        LL_USART_TransmitData8(USART_CHANNEL, busBuffer[busTxPos++]);
-        if (busTxPos >= busBufferLen) {
-            // wait until transmission is done
-            while(!LL_USART_IsActiveFlag_TC(USART_CHANNEL)) {}
-            LL_GPIO_ResetOutputPin(D_RS485_FLOW_CONTROL_GPIO_Port, D_RS485_FLOW_CONTROL_Pin);
-            LL_USART_SetTransferDirection(USART_CHANNEL, LL_USART_DIRECTION_TX_RX);
-            busState = StateIdle;
-        }
-    } else if (LL_USART_IsActiveFlag_RXNE(USART_CHANNEL) && busState != StateWrite) {
-        uint8_t data = LL_USART_ReceiveData8(USART_CHANNEL);
-        if (busState == StateIdle) {
+enum class State {
+    /// Wait for byte to appear on the bus.
+    /// Doesn't use any state variable.
+    idle = 0,
+
+    /// Wait for idle line condition, discarding any bytes appearing on the bus.
+    /// Doesn't use any state variable.
+    discard,
+
+    /// Wait for idle line condition, collecting all the bytes appearing on the bus.
+    /// Uses busAddress, busBuffer, busBufferLen state variables.
+    read,
+
+    /// Wait for empty transmit buffer, transmitting bytes as the buffer allows.
+    /// Uses busTxPos, busBuffer, busBufferLen state variables.
+    write,
+
+    /// Wait for write to complete.
+    /// Doesn't use any state variable.
+    finish_write,
+};
+
+static State state_idle(const State state) {
+    if (LL_USART_IsActiveFlag_RXNE(USART_CHANNEL)) {
+        // clear flag
+        const uint8_t data = LL_USART_ReceiveData8(USART_CHANNEL);
+
+        if (matchAddress(data)) {
             busAddress = data;
-            busState = StateRead;
             busBufferLen = 0;
-        } else if (busBufferLen < sizeof(busBuffer)) {
-            busBuffer[busBufferLen++] = data;
+            return State::read;
         } else {
-            // printf("rx ovf\n");
+            return State::discard;
         }
-    } else if (LL_USART_IsActiveFlag_RTO(USART_CHANNEL) && busState == StateRead) {
+    } else {
+        return state; // keep waiting for receive buffer not empty
+    }
+}
+
+static State state_discard(const State state) {
+    if (LL_USART_IsActiveFlag_IDLE(USART_CHANNEL)) {
+        // clear flag
+        LL_USART_ClearFlag_IDLE(USART_CHANNEL);
+
+        // clear errors
+        LL_USART_ClearFlag_FE(USART_CHANNEL);
+        LL_USART_ClearFlag_PE(USART_CHANNEL);
+        LL_USART_ClearFlag_ORE(USART_CHANNEL);
+        (void)LL_USART_ReceiveData8(USART_CHANNEL);
+
+        return State::idle;
+    } else {
+        return state; // keep waiting for idle line
+    }
+}
+
+static State state_read(const State state) {
+    if (LL_USART_IsActiveFlag_IDLE(USART_CHANNEL)) {
+        LL_USART_ClearFlag_IDLE(USART_CHANNEL);
+
         bool rxok = true;
         if (LL_USART_IsActiveFlag_PE(USART_CHANNEL)) {
             rxok = false;
@@ -169,26 +206,83 @@ bool BusUpdate() {
         if (LL_USART_IsActiveFlag_ORE(USART_CHANNEL)) {
             rxok = false;
         }
-
         LL_USART_ClearFlag_FE(USART_CHANNEL);
         LL_USART_ClearFlag_PE(USART_CHANNEL);
         LL_USART_ClearFlag_ORE(USART_CHANNEL);
         LL_USART_ClearFlag_RTO(USART_CHANNEL);
-
-        bool matched = matchAddress(busAddress);
-        if (!rxok || busBufferLen == 0 || !matched) {
+        if (!rxok) {
             busBufferLen = 0;
-        } else {
+        } else if (busBufferLen != 0) {
             busBufferLen = BusCallback(busAddress, busBuffer, busBufferLen, sizeof(busBuffer));
         }
-
         if (busBufferLen > 0) {
-            busState = StateWrite;
+            LL_GPIO_SetOutputPin(D_RS485_FLOW_CONTROL_GPIO_Port, D_RS485_FLOW_CONTROL_Pin);
             busTxPos = 0;
+            return State::write;
         } else {
-            busState = StateIdle;
+            return State::idle;
+        }
+    } else  if (LL_USART_IsActiveFlag_RXNE(USART_CHANNEL)) {
+        uint8_t data = LL_USART_ReceiveData8(USART_CHANNEL);
+        if (busBufferLen < sizeof(busBuffer)) {
+            busBuffer[busBufferLen++] = data;
+            return state; // read next byte
+        } else {
+            return State::discard;
         }
     }
+    return state;
+}
 
-    return busState != StateIdle;
+static State state_write(const State state) {
+    if (LL_USART_IsActiveFlag_TXE(USART_CHANNEL)) {
+        // clear flag
+        const uint8_t data = busBuffer[busTxPos++];
+        LL_USART_TransmitData8(USART_CHANNEL, data);
+
+        if (busTxPos == busBufferLen) {
+            return State::finish_write;
+        } else {
+            return state; // keep writing bytes
+        }
+    } else {
+        return state; // keep waiting for transmit buffer empty
+    }
+}
+
+static State state_finish_write(const State state) {
+    if (LL_USART_IsActiveFlag_TC(USART_CHANNEL)) {
+        // clear flag
+        LL_USART_ClearFlag_TC(USART_CHANNEL);
+
+        LL_GPIO_ResetOutputPin(D_RS485_FLOW_CONTROL_GPIO_Port, D_RS485_FLOW_CONTROL_Pin);
+        return State::idle;
+    } else {
+        return state; // keep waiting for transmission complete
+    }
+}
+
+static State get_next_state(const State state) {
+    // Note: Each handler gets the current state as first parameter. This keeps
+    //       the value ready in register in case there is no state transition.
+    switch (state) {
+    case State::idle:
+        return state_idle(state);
+    case State::discard:
+        return state_discard(state);
+    case State::read:
+        return state_read(state);
+    case State::write:
+        return state_write(state);
+    case State::finish_write:
+        return state_finish_write(state);
+    }
+    return state;
+}
+
+static State busState = State::idle;
+
+bool BusUpdate() {
+    busState = get_next_state(busState);
+    return busState != State::idle;
 }
