@@ -133,8 +133,9 @@ CXXFLAGS      += -fpack-struct -fshort-enums
 
 CXXFLAGS  += -ggdb3 -Os
 
-# Comment this out to enable watchdog, or put it into DEBUG to enable it only in release
+ifdef DISABLE_WATCHDOG
 CXXFLAGS  += -DDISABLE_WATCHDOG
+endif
 
 #CXXFLAGS      += -flto -ffat-lto-objects
 # I would think these are not required with -flto, but adding these
@@ -288,28 +289,28 @@ endif
 all: dwarf modularbed xbuddy_extension indx_head
 
 dwarf:
-	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 modularbed:
-	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 xbuddy_extension:
-	$(MAKE) firmware ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 indx_head:
 	$(MAKE) firmware ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
 
 dwarf_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_dwarf CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 modularbed_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-ocm3 BUS=Rs485 BOARD_TYPE=prusa_modular_bed CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 xbuddy_extension_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-h5hal BUS=Rs485 BOARD_TYPE=prusa_xbuddy_extension CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 indx_head_debug:
-	$(MAKE) firmware DEBUG=1 ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10
+	$(MAKE) firmware DEBUG=1 ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
 firmware: hex fuses size checksize
 
