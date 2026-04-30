@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include "sha256.h"
+#include "iwdg.hpp"
 
 uint8_t SelfProgram::eraseCount = 0;
 bool SelfProgram::appFwFingerprintValid = false;
@@ -21,9 +22,6 @@ uint8_t SelfProgram::readByte(uint32_t address) {
 }
 
 void SelfProgram::calculateSaltedFingerprint(uint32_t salt) {
-    uintptr_t start = FLASH_BASE + FLASH_APP_OFFSET;
-    size_t size = applicationSize;
-
 	//Helper to free sha context on return
     struct Context {
         mbedtls_sha256_context ctx;
@@ -44,8 +42,18 @@ void SelfProgram::calculateSaltedFingerprint(uint32_t salt) {
         return;
     }
 
-    if (mbedtls_sha256_update_ret(&context.ctx, (const unsigned char *)start, size) != 0) { // Firmware
-        return;
+    // Firmware
+    // We do it in parts to make sure we can kick the watchdog
+    static constexpr size_t chunk = 1024;
+    static_assert(applicationSize % chunk == 0);
+    for (uintptr_t offset = 0; offset < applicationSize; offset += chunk) {
+        uintptr_t start = FLASH_BASE + FLASH_APP_OFFSET + offset;
+
+        if (mbedtls_sha256_update_ret(&context.ctx, (const unsigned char *)start, chunk) != 0) {
+            return;
+        }
+
+        WatchdogReset();
     }
 
     if (mbedtls_sha256_finish_ret(&context.ctx, appFwFingerprint) != 0) {
