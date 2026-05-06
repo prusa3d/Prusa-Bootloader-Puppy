@@ -68,10 +68,8 @@ void mbedtls_sha256_free( mbedtls_sha256_context *ctx );
  * \brief          This function starts SHA-256 checksum calculation.
  *
  * \param ctx      The context to initialize.
- *
- * \return         \c 0 on success.
  */
-int mbedtls_sha256_starts_ret( mbedtls_sha256_context *ctx );
+void mbedtls_sha256_starts_ret( mbedtls_sha256_context *ctx );
 
 /**
  * \brief          This function feeds an input buffer into an ongoing
@@ -80,10 +78,8 @@ int mbedtls_sha256_starts_ret( mbedtls_sha256_context *ctx );
  * \param ctx      The SHA-256 context.
  * \param input    The buffer holding the data.
  * \param ilen     The length of the input data.
- *
- * \return         \c 0 on success.
  */
-int mbedtls_sha256_update_ret( mbedtls_sha256_context *ctx,
+void mbedtls_sha256_update_ret( mbedtls_sha256_context *ctx,
                                const unsigned char *input,
                                size_t ilen );
 
@@ -93,10 +89,8 @@ int mbedtls_sha256_update_ret( mbedtls_sha256_context *ctx,
  *
  * \param ctx      The SHA-256 context.
  * \param output   The SHA-256 checksum result.
- *
- * \return         \c 0 on success.
  */
-int mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
+void mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
                                unsigned char output[32] );
 
 /**
@@ -106,10 +100,8 @@ int mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
  *
  * \param ctx      The SHA-256 context.
  * \param data     The buffer holding one block of data.
- *
- * \return         \c 0 on success.
  */
-int mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
+void mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
                                      const unsigned char data[64] );
 
 /**
@@ -126,7 +118,7 @@ int mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
  * \param ilen     The length of the input data.
  * \param output   The SHA-256 checksum result.
  */
-int mbedtls_sha256_ret( const unsigned char *input,
+void mbedtls_sha256_ret( const unsigned char *input,
                         size_t ilen,
                         unsigned char output[32] );
 
