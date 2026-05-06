@@ -207,6 +207,7 @@ endif
 LDFLAGS        =
 # Use a custom linker script
 LDFLAGS       += -T $(LDSCRIPT)
+LDFLAGS       += -Wl,--print-memory-usage
 
 ifeq ($(ARCH),attiny)
 PREFIX         = avr-
