@@ -90,7 +90,9 @@ LDSCRIPT            = stm32-c0hal/stm32c092kcux.ld
 FLASH_WRITE_SIZE    = 256
 FLASH_ERASE_SIZE    = 2048
 
-BL_SIZE             = 8192
+PREBOOT_SIZE        = 2048
+BOOTLOADER_SIZE     = 6144
+BL_SIZE             := $(shell expr $(PREBOOT_SIZE) + $(BOOTLOADER_SIZE))
 BL_OFFSET           = 0
 
 # Bootloader is at the start of flash, so write app after it
@@ -153,6 +155,7 @@ CXXFLAGS	  += -DSTM32C092xx
 CXXFLAGS	  += -DSTM32C0
 CXXFLAGS	  += -DUSE_HAL_DRIVER
 CXXFLAGS	  += -DUSE_FULL_LL_DRIVER
+CXXFLAGS	  += -DPREBOOT_SIZE=$(PREBOOT_SIZE)
 
 CXXFLAGS      += -flto -ffat-lto-objects
 endif
@@ -225,6 +228,8 @@ CXXFLAGS      += -DFW_DESCRIPTOR_SIZE="($(FW_DESCRIPTOR_SIZE))"
 LDFLAGS       += -nostartfiles
 LDFLAGS       += -specs=nano.specs
 LDFLAGS       += -specs=nosys.specs
+LDFLAGS       += -Wl,--defsym=PREBOOT_SIZE=$(PREBOOT_SIZE)
+LDFLAGS       += -Wl,--defsym=BOOTLOADER_SIZE=$(BOOTLOADER_SIZE)
 endif
 
 CC             = $(PREFIX)gcc
@@ -292,6 +297,9 @@ clean:
 
 cleanarch:
 	rm -rf $(OBJ) $(OBJ:.o=.d) $(EXTRA_OBJ) $(EXTRA_OBJ:.o=.d) *.elf *.bin
+ifeq ($(ARCH),stm32-c0hal)
+	$(MAKE) -C preboot clean
+endif
 
 $(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
 	$(CC) $(CXXFLAGS) $(LDFLAGS) -o $@ $(EXTRA_OBJ) $(OBJ) $(LDLIBS)
@@ -308,6 +316,27 @@ $(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
 
 %.bin: %.elf
 	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O binary $< $@
+	chmod a-x $@
+
+ifeq ($(ARCH),stm32-c0hal)
+
+$(FILE_NAME).nopreboot.nocrc.bin: $(FILE_NAME).elf
+	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O binary $< $@
+	chmod a-x $@
+
+$(FILE_NAME).nopreboot.bin: $(FILE_NAME).nopreboot.nocrc.bin pad_with_crc32.py
+	./pad_with_crc32.py $< $(BOOTLOADER_SIZE) $@
+
+.PHONY: preboot/preboot.bin
+preboot/preboot.bin:
+	$(MAKE) -C preboot PREBOOT_SIZE=$(PREBOOT_SIZE) BOOTLOADER_SIZE=$(BOOTLOADER_SIZE)
+
+$(FILE_NAME).bin: preboot/preboot.bin $(FILE_NAME).nopreboot.bin
+	cat $^ > $@
+
+firmware: $(FILE_NAME).bin
+
+else
 
 # When the bootloader has an offset, objcopy pads the pin file at the
 # start, so correct for that.
@@ -317,6 +346,8 @@ firmware: $(FILE_NAME).bin
 		echo "Compiled size too big, maybe adjust BL_SIZE in Makefile?"; \
 		false; \
 	fi
+
+endif
 
 .PHONY: all clean firmware
 
