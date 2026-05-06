@@ -69,15 +69,6 @@ void mbedtls_sha256_init( mbedtls_sha256_context *ctx );
 void mbedtls_sha256_free( mbedtls_sha256_context *ctx );
 
 /**
- * \brief          This function clones the state of a SHA-256 context.
- *
- * \param dst      The destination context.
- * \param src      The context to clone.
- */
-void mbedtls_sha256_clone( mbedtls_sha256_context *dst,
-                           const mbedtls_sha256_context *src );
-
-/**
  * \brief          This function starts a SHA-224 or SHA-256 checksum
  *                 calculation.
  *
@@ -148,14 +139,6 @@ int mbedtls_sha256_ret( const unsigned char *input,
                         size_t ilen,
                         unsigned char output[32],
                         int is224 );
-
-/**
- * \brief          The SHA-224 and SHA-256 checkup routine.
- *
- * \return         \c 0 on success.
- * \return         \c 1 on failure.
- */
-int mbedtls_sha256_self_test( int verbose );
 
 #ifdef __cplusplus
 }
