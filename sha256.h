@@ -104,24 +104,6 @@ void mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
 void mbedtls_internal_sha256_process( mbedtls_sha256_context *ctx,
                                      const unsigned char data[64] );
 
-/**
- * \brief          This function calculates the SHA-256
- *                 checksum of a buffer.
- *
- *                 The function allocates the context, performs the
- *                 calculation, and frees the context.
- *
- *                 The SHA-256 result is calculated as
- *                 output = SHA-256(input buffer).
- *
- * \param input    The buffer holding the input data.
- * \param ilen     The length of the input data.
- * \param output   The SHA-256 checksum result.
- */
-void mbedtls_sha256_ret( const unsigned char *input,
-                        size_t ilen,
-                        unsigned char output[32] );
-
 #ifdef __cplusplus
 }
 #endif

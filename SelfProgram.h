@@ -55,6 +55,9 @@ public:
 	static bool appFwFingerprintValid;
 	static unsigned char appFwFingerprint[32];
 	static uint32_t appFwFingerprintSalt;
+
+private:
+	static void calculateFingerprint(const uint32_t *salt_or_null, uint32_t size, unsigned char output[32]);
 };
 
 #endif /* SELFPROGRAM_H_ */

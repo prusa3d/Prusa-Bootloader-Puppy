@@ -291,23 +291,3 @@ void mbedtls_sha256_finish_ret( mbedtls_sha256_context *ctx,
     PUT_UINT32_BE( ctx->state[7], output, 28 );
 }
 
-/*
- * output = SHA-256( input buffer )
- */
-void mbedtls_sha256_ret( const unsigned char *input,
-                        size_t ilen,
-                        unsigned char output[32])
-{
-    mbedtls_sha256_context ctx;
-
-    mbedtls_sha256_init( &ctx );
-
-    mbedtls_sha256_starts_ret( &ctx );
-
-    mbedtls_sha256_update_ret( &ctx, input, ilen );
-
-    mbedtls_sha256_finish_ret( &ctx, output );
-
-    mbedtls_sha256_free( &ctx );
-}
-
