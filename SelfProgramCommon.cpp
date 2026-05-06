@@ -34,7 +34,7 @@ void SelfProgram::calculateSaltedFingerprint(uint32_t salt) {
     };
     Context context;
 
-    if (mbedtls_sha256_starts_ret(&context.ctx, false) != 0) {
+    if (mbedtls_sha256_starts_ret(&context.ctx) != 0) {
         return;
     }
 
@@ -69,7 +69,7 @@ bool SelfProgram::checkUnsaltedFingerprint(const unsigned char fingerprint[32])
 	size_t size = applicationSize - FW_DESCRIPTOR_SIZE; // this is size of entire application flash area without the fw descriptor
 	unsigned char calculatedFingerprint[32] = {0};
 
-	if (mbedtls_sha256_ret((const unsigned char *)start, size, calculatedFingerprint, false) != 0) {
+	if (mbedtls_sha256_ret((const unsigned char *)start, size, calculatedFingerprint) != 0) {
 		return false;	// Couldn't check = check failed
 	}
 
