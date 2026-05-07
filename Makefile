@@ -1,5 +1,3 @@
-# Makefile to compile bootloader-attiny
-#
 # Copyright 2017 Matthijs Kooijman <matthijs@stdin.nl>
 #
 # Permission is hereby granted, free of charge, to anyone obtaining a
@@ -8,9 +6,6 @@
 # redistribution.
 #
 # NO WARRANTY OF ANY KIND IS PROVIDED.
-#
-# To compile, just make sure that avr-gcc and friends are in your path
-# and type "make".
 
 # Protocol version major version must fit
 # Major 0xff00, minor 0x00ff
@@ -59,17 +54,7 @@ OBJ_TMP        = $(SOURCES:.cpp=.o)
 OBJ_TMP2       = $(OBJ_TMP:.c=.o)
 OBJ            = $(OBJ_TMP2:.s=.o)
 
-ifeq ($(ARCH),attiny)
-LDSCRIPT       = $(ARCH)/linker-script.x
-MCU            = attiny841
-FLASH_WRITE_SIZE    = SPM_PAGESIZE # Defined by avr-libc
-FLASH_ERASE_SIZE    = 64
-FLASH_SIZE          = 8192
-# Size of the bootloader area. Must be a multiple of the erase size
-BL_SIZE        = 2048
-FLASH_APP_OFFSET    = 0
-BL_OFFSET           = $(shell expr $(FLASH_SIZE) - $(BL_SIZE))
-else ifeq ($(ARCH),stm32-ocm3)
+ifeq ($(ARCH),stm32-ocm3)
 LDSCRIPT            = stm32-ocm3/stm32g070rbt6.ld
 OPENCM3_DIR         = libopencm3
 DEVICE              = STM32G070RBT6
@@ -209,20 +194,7 @@ LDFLAGS        =
 LDFLAGS       += -T $(LDSCRIPT)
 LDFLAGS       += -Wl,--print-memory-usage
 
-ifeq ($(ARCH),attiny)
-PREFIX         = avr-
-SIZE_FORMAT    = avr
-
-LDFLAGS       += -mmcu=$(MCU)
-
-CXXFLAGS      += -mmcu=$(MCU) -DF_CPU=8000000UL
-
-# Pass sizes to the script for positioning
-LDFLAGS       += -Wl,--defsym=BL_SIZE=$(BL_SIZE)
-LDFLAGS       += -Wl,--defsym=VERSION_SIZE=$(VERSION_SIZE)
-# Pass ERASE_SIZE to the script to verify alignment
-LDFLAGS       += -Wl,--defsym=FLASH_ERASE_SIZE=$(FLASH_ERASE_SIZE)
-else ifeq ($(ARCH),stm32-ocm3)
+ifeq ($(ARCH),stm32-ocm3)
 PREFIX         = arm-none-eabi-
 SIZE_FORMAT    = berkely
 
@@ -313,33 +285,17 @@ xbuddy_extension_debug:
 indx_head_debug:
 	$(MAKE) firmware DEBUG=1 ARCH=stm32-c0hal BUS=Rs485 BOARD_TYPE=prusa_indx_head CURRENT_HW_REVISION=0x10 COMPATIBLE_HW_REVISION=0x10 DISABLE_WATCHDOG=1
 
-firmware: hex fuses size checksize
-
-hex: $(FILE_NAME).hex
-
-fuses:
-ifdef ATTINY
-	@if $(OBJDUMP) -s -j .fuse 2> /dev/null $(FILE_NAME).elf > /dev/null; then \
-		$(OBJDUMP) -s -j .fuse $(FILE_NAME).elf; \
-		echo "        ^^     Low"; \
-		echo "          ^^   High"; \
-		echo "            ^^ Extended"; \
-	fi
-endif
-
-size:
-	$(SIZE) --format=$(SIZE_FORMAT) $(FILE_NAME).elf
-
 clean:
 	$(MAKE) cleanarch ARCH=stm32-ocm3 BUS=Rs485
 	$(MAKE) cleanarch ARCH=stm32-h5hal BUS=RS485
 	$(MAKE) cleanarch ARCH=stm32-c0hal BUS=RS485
 
 cleanarch:
-	rm -rf $(OBJ) $(OBJ:.o=.d) $(EXTRA_OBJ) $(EXTRA_OBJ:.o=.d) *.elf *.hex *.lst *.map *.bin
+	rm -rf $(OBJ) $(OBJ:.o=.d) $(EXTRA_OBJ) $(EXTRA_OBJ:.o=.d) *.elf *.bin
 
 $(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
 	$(CC) $(CXXFLAGS) $(LDFLAGS) -o $@ $(EXTRA_OBJ) $(OBJ) $(LDLIBS)
+	$(SIZE) --format=$(SIZE_FORMAT) $(FILE_NAME).elf
 
 %.o: %.cpp Makefile
 	$(CC) -std=gnu++11 $(CXXFLAGS) -MMD -MP -c -o $@ $<
@@ -350,25 +306,19 @@ $(FILE_NAME).elf: $(OBJ) $(EXTRA_OBJ) $(LDSCRIPT) $(LIBDEPS)
 %.o: %.s Makefile
 	$(CC) $(CXXFLAGS) -MMD -MP -c -o $@ $<
 
-%.lst: %.elf
-	$(OBJDUMP) -h -S $< > $@
-
-%.hex: %.elf
-	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O ihex $< $@
-
 %.bin: %.elf
 	$(OBJCOPY) -j .isr_vector -j .text -j '.text.*' -j .rodata -j .data -O binary $< $@
 
 # When the bootloader has an offset, objcopy pads the pin file at the
 # start, so correct for that.
 MAX_BIN_SIZE=$(shell expr $(BL_OFFSET) + $(BL_SIZE))
-checksize: $(FILE_NAME).bin
+firmware: $(FILE_NAME).bin
 	@if [ $$(stat -c '%s' $<) -gt $(MAX_BIN_SIZE) ]; then \
 		echo "Compiled size too big, maybe adjust BL_SIZE in Makefile?"; \
 		false; \
 	fi
 
-.PHONY: all lst hex clean fuses size firmware
+.PHONY: all clean firmware
 
 # pull in dependency info for *existing* .o files
 -include $(OBJ:.o=.d)
