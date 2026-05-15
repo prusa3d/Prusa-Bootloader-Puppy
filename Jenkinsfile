@@ -20,39 +20,41 @@ pipeline {
                         // This is build of an ordinary branch (not a release branch)
                         prefix = env.BRANCH_NAME.replaceAll("_", "-")
                     }
-                    env.BL_VERSION = "${commit_nr}"
-                    env.BL_VERSION_PREFIX = prefix
+                    env.VERSION = "${commit_nr}"
+                    env.VERSION_PREFIX = prefix
                 }
             }
         }
 
-        stage("Build libopencm3") {
-            steps {
-                sh 'make -C libopencm3 lib/stm32/g0'
-            }
-        }
+        stage("Build") {
+            parallel {
+                stage("Dwarf") {
+                    steps {
+                        sh 'cmake --preset dwarf -DVERSION=$VERSION -DVERSION_PREFIX=$VERSION_PREFIX'
+                        sh 'cmake --build --preset dwarf'
+                    }
+                }
 
-        stage("Build Dwarf") {
-            steps {
-                sh "make dwarf"
-            }
-        }
+                stage("Modular Bed") {
+                    steps {
+                        sh 'cmake --preset modularbed -DVERSION=$VERSION -DVERSION_PREFIX=$VERSION_PREFIX'
+                        sh 'cmake --build --preset modularbed'
+                    }
+                }
 
-        stage("Build Modular Bed") {
-            steps {
-                sh "make modularbed"
-            }
-        }
+                stage("XBuddy Extension") {
+                    steps {
+                        sh 'cmake --preset xbuddy_extension -DVERSION=$VERSION -DVERSION_PREFIX=$VERSION_PREFIX'
+                        sh 'cmake --build --preset xbuddy_extension'
+                    }
+                }
 
-        stage("Build XBuddy Extension") {
-            steps {
-                sh "make xbuddy_extension"
-            }
-        }
-
-        stage("Build INDX Head") {
-            steps {
-                sh "make indx_head"
+                stage("INDX Head") {
+                    steps {
+                        sh 'cmake --preset indx_head -DVERSION=$VERSION -DVERSION_PREFIX=$VERSION_PREFIX'
+                        sh 'cmake --build --preset indx_head'
+                    }
+                }
             }
         }
     }
@@ -60,7 +62,7 @@ pipeline {
     post {
         always {
             // archive build products
-            archiveArtifacts artifacts: 'bootloader-*', fingerprint: true
+            archiveArtifacts artifacts: 'build/*/bootloader-*', fingerprint: true
         }
         cleanup {
             deleteDir()
