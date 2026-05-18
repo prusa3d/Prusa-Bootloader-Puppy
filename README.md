@@ -21,5 +21,4 @@ Most code and accompanying materials are licensed under the GPL, version
 3. See the LICENSE file for the full license.
 
 The protocol documentation, in the PROTOCOL.md file, has a more liberal
-license (see the file for the exact license). The testing sketch, in the
-BootloaderTest directory is licensed under the 3-clause BSD license.
+license (see the file for the exact license).
