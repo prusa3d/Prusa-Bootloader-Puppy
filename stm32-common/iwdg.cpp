@@ -15,15 +15,11 @@ void WatchdogStart() {
     LL_IWDG_SetWindow(IWDG, 0xfff);                   // maximum value
     while (!LL_IWDG_IsReady(IWDG)) {}                 // busy wait, if we halt here we are dead anyway
     LL_IWDG_ReloadCounter(IWDG);                      // also disables write access
-#else
-    #warning "watchdog disabled"
 #endif
 }
 
 void WatchdogReset() {
 #ifndef DISABLE_WATCHDOG
     LL_IWDG_ReloadCounter(IWDG);
-#else
-    #warning "watchdog disabled"
 #endif
 }

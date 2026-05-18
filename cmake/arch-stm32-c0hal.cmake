@@ -18,7 +18,9 @@ target_sources(bootloader PRIVATE
     stm32-common/Reset.cpp
     stm32-common/Rs485.cpp
     stm32-common/uart.cpp
+)
 
+set(HAL_SOURCES
     stm32c0xx-hal-driver/Src/stm32c0xx_hal_cortex.c
     stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash.c
     stm32c0xx-hal-driver/Src/stm32c0xx_hal_flash_ex.c
@@ -30,6 +32,8 @@ target_sources(bootloader PRIVATE
     stm32c0xx-hal-driver/Src/stm32c0xx_ll_gpio.c
     stm32c0xx-hal-driver/Src/stm32c0xx_ll_utils.c
 )
+target_sources(bootloader PRIVATE ${HAL_SOURCES})
+set_source_files_properties(${HAL_SOURCES} PROPERTIES COMPILE_OPTIONS "-Wno-unused-parameter")
 
 target_include_directories(bootloader PRIVATE
     ${CMAKE_SOURCE_DIR}/stm32-c0hal
@@ -63,7 +67,6 @@ target_link_options(bootloader PRIVATE
     -T${LDSCRIPT}
     -nostartfiles
     -specs=nano.specs
-    -specs=nosys.specs
     -Wl,--defsym=PREBOOT_SIZE=${PREBOOT_SIZE}
     -Wl,--defsym=BOOTLOADER_SIZE=${BOOTLOADER_SIZE}
 )

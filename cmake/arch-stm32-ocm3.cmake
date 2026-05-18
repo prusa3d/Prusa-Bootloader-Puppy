@@ -43,7 +43,7 @@ target_link_options(bootloader PRIVATE
     -T${LDSCRIPT}
     -nostartfiles
     -specs=nano.specs
-    -specs=nosys.specs
+    -Wl,--no-warn-rwx-segments
     -Wl,--defsym=BL_SIZE=${BL_SIZE}
 )
 set_target_properties(bootloader PROPERTIES LINK_DEPENDS ${LDSCRIPT})
@@ -54,7 +54,7 @@ ExternalProject_Add(libopencm3_ext
     SOURCE_DIR        ${CMAKE_SOURCE_DIR}/libopencm3
     BUILD_IN_SOURCE   TRUE
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND     make lib/stm32/g0 "CFLAGS=-flto -fno-fat-lto-objects"
+    BUILD_COMMAND     make lib/stm32/g0 "CFLAGS=-flto -ffat-lto-objects"
     INSTALL_COMMAND   ""
     BUILD_BYPRODUCTS  ${OPENCM3_LIB}
     BUILD_ALWAYS      FALSE
