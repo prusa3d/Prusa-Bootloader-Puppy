@@ -9,6 +9,9 @@ static constexpr uint32_t OTP_SIZE = 1024;
 #elif defined(STM32H5)
 static constexpr uint32_t OTP_START_ADDR = 0x08FFF000UL;
 static constexpr uint32_t OTP_SIZE = 0x800;
+#elif defined(STM32F4)
+static constexpr uint32_t OTP_START_ADDR = 0x1FFF7800UL;
+static constexpr uint32_t OTP_SIZE = 528;
 #else
 #error "Missing OTP definition"
 #endif
@@ -29,4 +32,3 @@ inline OTP_v5 get_OTP_data() {
     read_otp(0, (uint8_t *)&data, sizeof(data));
     return data;
 }
-

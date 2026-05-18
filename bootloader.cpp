@@ -46,12 +46,12 @@ struct Commands {
 	static const uint8_t READ_OTP              = 0x10;
 
 	// These were removed and should not be used
-	static const uint8_t RESERVED_02 = 0x02; ///< POWER_UP_DISPLAY     
+	static const uint8_t RESERVED_02 = 0x02; ///< POWER_UP_DISPLAY
 	static const uint8_t RESERVED_04 = 0x04; ///< GET_SERIAL_NUMBER
 	static const uint8_t RESERVED_09 = 0x09; ///< GET_HARDWARE_REVISION
-	static const uint8_t RESERVED_0a = 0x0a; ///< GET_NUM_CHILDREN     
-	static const uint8_t RESERVED_0b = 0x0b; ///< SET_CHILD_SELECT     
-	static const uint8_t RESERVED_0d = 0x0d; ///< GET_EXTRA_INFO       
+	static const uint8_t RESERVED_0a = 0x0a; ///< GET_NUM_CHILDREN
+	static const uint8_t RESERVED_0b = 0x0b; ///< SET_CHILD_SELECT
+	static const uint8_t RESERVED_0d = 0x0d; ///< GET_EXTRA_INFO
 	static const uint8_t RESERVED_46 = 0x46; ///< RESET
 	static const uint8_t RESERVED_44 = 0x44; ///< RESET_ADDRESS
 };
@@ -69,6 +69,8 @@ constexpr const struct VersionInfoInFlash version_info __attribute__((__section_
 	INFO_HW_TYPE,
 	BL_VERSION,
 };
+
+uint8_t info_hw_type{INFO_HW_TYPE};
 
 struct __attribute__((packed)) ApplicationStartupArguments {
     uint8_t modbus_address;
@@ -117,7 +119,6 @@ static bool equalToFlash(uint32_t address, uint16_t len) {
 
 
 static uint8_t commitToFlash(uint32_t address, uint16_t len) {
-	// If nothing needs to be changed, then don't
 	if (equalToFlash(address, len))
 		return 0;
 
@@ -134,10 +135,29 @@ static uint8_t commitToFlash(uint32_t address, uint16_t len) {
 }
 
 static cmd_result handleWriteFlash(uint32_t address, uint8_t *data, uint16_t len, uint8_t *dataout) {
-	if (address == 0)
-		nextWriteAddress = 0;
 
+#ifdef STM32F4
+	// Anyone using STM32F427 or similar will want to avoid writing full 2MB- 16kB of flash. This allows
+	// non-contiguous writes to the flash, but it's necessary to erase the application flash first!
+	// Erasing whole application flash takes some time(~30s) but after that, the writes are fast.
+	if(address == 0) {
+		// Erase the application flash area
+		if (SelfProgram::eraseApplicationFlash() != 0) {
+			dataout[0] = 1;
+			return cmd_result(Status::COMMAND_FAILED, 1);
+		}
+	}
+
+	// This guarantees that writes are aligned to the erase page size(==sizeof(writeBuffer))
+	if (address % sizeof(writeBuffer) == 0)
+		nextWriteAddress = address;
+#else
 	// Only consecutive writes are supported
+	if(address == 0) {
+		nextWriteAddress = address;
+	}
+#endif // STM32F4
+
 	if (address != nextWriteAddress)
 		return cmd_result(Status::INVALID_ARGUMENTS);
 
@@ -231,7 +251,7 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 
 			// Type 42 dwarf or type 43 modular bed
 			static_assert(sizeof(INFO_HW_TYPE) == sizeof(uint8_t), "INFO_HW_TYPE won't fit to 1 byte!");
-			dataout[0] = INFO_HW_TYPE;
+			dataout[0] = info_hw_type;  // Might be changed at runtime(prusa_baseboard) to reflect the actual board type(determined by resistors on GPIO pins)
 
 			// Hardware revision
 			uint16_t hardware_revision = get_revision();
@@ -327,7 +347,7 @@ cmd_result processCommand(uint8_t cmd, uint8_t *datain, uint8_t len, uint8_t *da
 			}
 
 			SelfProgram::appFwFingerprintSalt = datain[0] << 24 | datain[1] << 16 | datain[2] << 8 | datain[3];
-			
+
 			SelfProgram::calculateSaltedFingerprint(SelfProgram::appFwFingerprintSalt);
 			return cmd_ok();
 		}

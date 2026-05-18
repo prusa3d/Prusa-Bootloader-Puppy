@@ -2,6 +2,8 @@
     #include <stm32h5xx_ll_iwdg.h>
 #elif defined(STM32C0)
     #include <stm32c0xx_ll_iwdg.h>
+#elif defined(STM32F4)
+    #include <stm32f4xx_ll_iwdg.h>
 #else
     #error
 #endif

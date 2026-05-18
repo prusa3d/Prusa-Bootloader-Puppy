@@ -31,6 +31,14 @@
         {
             "name": "indx_head",
             "inherits": "_base"
+        },
+        {
+            "name": "baseboard",
+            "inherits": "_base"
+        },
+        {
+            "name": "smartled01",
+            "inherits": "_base"
         }
     ],
     "buildPresets": [
@@ -49,6 +57,14 @@
         {
             "name": "indx_head",
             "configurePreset": "indx_head"
+        },
+        {
+            "name": "baseboard",
+            "configurePreset": "baseboard"
+        },
+        {
+            "name": "smartled01",
+            "configurePreset": "smartled01"
         }
     ]
 }

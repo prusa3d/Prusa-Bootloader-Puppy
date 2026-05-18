@@ -25,6 +25,12 @@
 extern "C" {
 #endif
 
+/* Hardware type overwritable at runtime.
+ * Part of SL1SW-2927: "Add support for baseboard variants" - different
+ * variants of baseboard are determined by resistors connected to GPIO pins.
+ */
+extern uint8_t info_hw_type;
+
 void runBootloader();
 void ClockInit();
 void ClockDeinit();

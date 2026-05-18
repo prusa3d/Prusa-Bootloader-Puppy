@@ -5,6 +5,9 @@
 #include "stm32h5xx_hal_cortex.h"
 #elif defined(STM32C0)
 #include "stm32c0xx_hal_cortex.h"
+#elif defined(STM32F4)
+#include "stm32f4xx_hal_flash.h"
+#include "stm32f4xx_hal_cortex.h"
 #else
 #error
 #endif

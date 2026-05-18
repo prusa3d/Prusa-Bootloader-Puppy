@@ -39,6 +39,20 @@ pipeline {
                         sh 'cmake --build --preset indx_head'
                     }
                 }
+
+                stage("Baseboard") {
+                    steps {
+                        sh 'cmake --preset baseboard'
+                        sh 'cmake --build --preset baseboard'
+                    }
+                }
+
+                stage("Smartled01") {
+                    steps {
+                        sh 'cmake --preset smartled01'
+                        sh 'cmake --build --preset smartled01'
+                    }
+                }
             }
         }
     }

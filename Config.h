@@ -44,6 +44,22 @@
 #elif defined(BOARD_TYPE_prusa_indx_head)
 	const uint8_t INFO_HW_TYPE = 45;
     const uint16_t MAX_PACKET_LENGTH = 255;
+#elif defined(BOARD_TYPE_prusa_baseboard)
+    // Actual INFO_HW_TYPE is determined at runtime based on resistors
+    // connected to the GPIO pins of the baseboard. This will be
+    // a placeholder.
+    // Baseboard variants:
+    // - 53 for Baseboard SLX variant,
+    // - 54 for CX variant and
+    // - 55 for WX variant of baseboard
+    // - 51 left for old baseboard10(obsolete) with no ID pins grounded.
+    const uint8_t INFO_HW_TYPE = 51;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+    #define NEEDS_ADDRESS_CHANGE 0
+#elif defined(BOARD_TYPE_prusa_smartled01)
+    const uint8_t INFO_HW_TYPE = 52;
+    const uint16_t MAX_PACKET_LENGTH = 255;
+    #define NEEDS_ADDRESS_CHANGE 0
 #else
 	#error "No board type defined"
 #endif
