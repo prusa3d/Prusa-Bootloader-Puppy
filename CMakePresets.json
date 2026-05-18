@@ -1,0 +1,70 @@
+{
+    "version": 3,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "_base",
+            "hidden": true,
+            "generator": "Ninja",
+            "toolchainFile": "${sourceDir}/cmake/toolchain-arm-none-eabi.cmake",
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "cacheVariables": {
+                "BOARD": "${presetName}"
+            }
+        },
+        {
+            "name": "dwarf",
+            "inherits": "_base"
+        },
+        {
+            "name": "modularbed",
+            "inherits": "_base"
+        },
+        {
+            "name": "xbuddy_extension",
+            "inherits": "_base"
+        },
+        {
+            "name": "indx_head",
+            "inherits": "_base"
+        },
+        {
+            "name": "baseboard",
+            "inherits": "_base"
+        },
+        {
+            "name": "smartled01",
+            "inherits": "_base"
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "dwarf",
+            "configurePreset": "dwarf"
+        },
+        {
+            "name": "modularbed",
+            "configurePreset": "modularbed"
+        },
+        {
+            "name": "xbuddy_extension",
+            "configurePreset": "xbuddy_extension"
+        },
+        {
+            "name": "indx_head",
+            "configurePreset": "indx_head"
+        },
+        {
+            "name": "baseboard",
+            "configurePreset": "baseboard"
+        },
+        {
+            "name": "smartled01",
+            "configurePreset": "smartled01"
+        }
+    ]
+}

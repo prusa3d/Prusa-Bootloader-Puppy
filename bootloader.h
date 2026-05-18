@@ -20,7 +20,6 @@
 
 #include <stdint.h>
 #include "otp.hpp"
-#include "Config.h"
 
 #ifdef __cplusplus
 extern "C" {

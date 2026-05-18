@@ -61,24 +61,15 @@ public:
 	 */
 	static bool checkUnsaltedFingerprint(const unsigned char fingerprint[32]);
 
-	#if defined(NEED_TRAMPOLINE)
-	static void writeTrampoline(uint16_t instruction);
-
-	static uint16_t offsetRelativeJump(uint16_t instruction, int16_t offset);
-
-	static uint16_t trampolineStart;
-
-	// Use a reference to make this an alias to trampolineStart for
-	// readability
-	static constexpr const uint16_t& applicationSize = trampolineStart;
-	#else
 	static constexpr const uint32_t applicationSize = APPLICATION_SIZE;
-	#endif // defined(NEED_TRAMPOLINE)
 
 	static uint8_t eraseCount;
 	static bool appFwFingerprintValid;
 	static unsigned char appFwFingerprint[32];
 	static uint32_t appFwFingerprintSalt;
+
+private:
+	static void calculateFingerprint(const uint32_t *salt_or_null, uint32_t size, unsigned char output[32]);
 };
 
 #endif /* SELFPROGRAM_H_ */

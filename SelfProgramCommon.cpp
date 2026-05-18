@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include "sha256.h"
+#include "iwdg.hpp"
 
 uint8_t SelfProgram::eraseCount = 0;
 bool SelfProgram::appFwFingerprintValid = false;
@@ -20,50 +21,38 @@ uint8_t SelfProgram::readByte(uint32_t address) {
 	return *ptr;
 }
 
+void SelfProgram::calculateFingerprint(const uint32_t *salt_or_null, uint32_t size, unsigned char output[32]) {
+    mbedtls_sha256_context ctx;
+    mbedtls_sha256_init(&ctx);
+    mbedtls_sha256_starts_ret(&ctx);
+
+    if (salt_or_null) {
+        mbedtls_sha256_update_ret(&ctx, reinterpret_cast<const uint8_t *>(salt_or_null), sizeof(*salt_or_null));
+    }
+
+    // Hash the firmware in chunks so we can kick the watchdog
+    static constexpr size_t chunk = 1024;
+    const unsigned char *p = (const unsigned char *)(FLASH_BASE + FLASH_APP_OFFSET);
+    while (size > 0) {
+        size_t n = size < chunk ? size : chunk;
+        mbedtls_sha256_update_ret(&ctx, p, n);
+        WatchdogReset();
+        p += n;
+        size -= n;
+    }
+
+    mbedtls_sha256_finish_ret(&ctx, output);
+    mbedtls_sha256_free(&ctx);
+}
+
 void SelfProgram::calculateSaltedFingerprint(uint32_t salt) {
-    uintptr_t start = FLASH_BASE + FLASH_APP_OFFSET;
-    size_t size = applicationSize;
-
-	//Helper to free sha context on return
-    struct Context {
-        mbedtls_sha256_context ctx;
-        Context() {
-            mbedtls_sha256_init(&ctx);
-        }
-        ~Context() {
-            mbedtls_sha256_free(&ctx);
-        }
-    };
-    Context context;
-
-    if (mbedtls_sha256_starts_ret(&context.ctx, false) != 0) {
-        return;
-    }
-
-    if (mbedtls_sha256_update_ret(&context.ctx, reinterpret_cast<uint8_t *>(&salt), sizeof(salt)) != 0) { // Salt
-        return;
-    }
-
-    if (mbedtls_sha256_update_ret(&context.ctx, (const unsigned char *)start, size) != 0) { // Firmware
-        return;
-    }
-
-    if (mbedtls_sha256_finish_ret(&context.ctx, appFwFingerprint) != 0) {
-        return;
-    }
-
+    calculateFingerprint(&salt, applicationSize, appFwFingerprint);
     appFwFingerprintValid = true;
 }
 
 bool SelfProgram::checkUnsaltedFingerprint(const unsigned char fingerprint[32])
 {
-	uintptr_t start = FLASH_BASE + FLASH_APP_OFFSET;
-	size_t size = applicationSize - FW_DESCRIPTOR_SIZE; // this is size of entire application flash area without the fw descriptor
-	unsigned char calculatedFingerprint[32] = {0};
-
-	if (mbedtls_sha256_ret((const unsigned char *)start, size, calculatedFingerprint, false) != 0) {
-		return false;	// Couldn't check = check failed
-	}
-
+	unsigned char calculatedFingerprint[32];
+	calculateFingerprint(nullptr, applicationSize - FW_DESCRIPTOR_SIZE, calculatedFingerprint);
 	return (memcmp(calculatedFingerprint, fingerprint, sizeof(calculatedFingerprint)) == 0);
 }

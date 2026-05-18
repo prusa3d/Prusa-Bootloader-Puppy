@@ -16,6 +16,7 @@
  */
 
 #include <string.h>
+#include <stdio.h>
 
 #include "Config.h"
 #include "Bus.h"
@@ -26,8 +27,9 @@
 #include "crash_dump_shared.hpp"
 #include "otp.hpp"
 #include "power_panic.hpp"
+#include "rtt.hpp"
 #include "iwdg.hpp"
-#include "fan.hpp"
+#include "security_features.hpp"
 #include "Gpio.h"
 
 extern "C" void _init() {}
@@ -365,6 +367,9 @@ extern "C" {
 		ClockInit();
 		BusInit();
 
+		rtt::init();
+		rtt::print("started\n");
+
 		// Configure watchdog
 		WatchdogStart();
 		WatchdogReset();
@@ -375,6 +380,7 @@ extern "C" {
 		led::set_rgb(0, 0, 0x0f); // blue: bl is running
 
 		StartFan();
+        DisableHeaters();
 
 		bool busy = true;
 		while (busy || !bootloaderExit) {

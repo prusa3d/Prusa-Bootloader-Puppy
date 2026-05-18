@@ -67,12 +67,13 @@ uint8_t SelfProgram::eraseApplicationFlash() {
         .Banks = FLASH_BANK_1,
         .Sector = 1,
         .NbSectors = 11,
+        .VoltageRange = FLASH_VOLTAGE_RANGE_3,
     };
     if (HAL_FLASHEx_Erase(&EraseInitStruct, &erase_error) != HAL_OK) {
-        printf("Erase failed: %d\n", erase_error);
+        printf("Erase failed: %lu\n", erase_error);
         return 1;
     }
-    printf("Erase successful, %u ms\n", HAL_GetTick() - t0);
+    printf("Erase successful, %lu ms\n", HAL_GetTick() - t0);
 
     t0 = HAL_GetTick();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_WRPERR | FLASH_FLAG_PGSERR);
@@ -81,12 +82,15 @@ uint8_t SelfProgram::eraseApplicationFlash() {
     EraseInitStruct = {
         .TypeErase = FLASH_TYPEERASE_MASSERASE,
         .Banks = FLASH_BANK_2,
+        .Sector = 0,
+        .NbSectors = 0,
+        .VoltageRange = FLASH_VOLTAGE_RANGE_3,
     };
     if (HAL_FLASHEx_Erase(&EraseInitStruct, &erase_error) != HAL_OK) {
-        printf("Erase failed: %d\n", erase_error);
+        printf("Erase failed: %lu\n", erase_error);
         return 1;
     }
-    printf("Erase successful, %u ms\n", HAL_GetTick() - t0);
+    printf("Erase successful, %lu ms\n", HAL_GetTick() - t0);
 
     HAL_FLASH_Unlock();
     return 0;
@@ -111,8 +115,8 @@ uint8_t SelfProgram::eraseApplicationFlash() {
  **/
 uint8_t SelfProgram::writePage(uint32_t address, uint8_t *data, uint16_t len) {
     uint32_t flash_address = application_start + address;
-    printf("SelfProgram::writePage(%08X, %d)\n", address,  len);
-    printf("Real address: %08X\n", flash_address);
+    printf("SelfProgram::writePage(%08lX, %d)\n", address,  len);
+    printf("Real address: %08lX\n", flash_address);
 
     HAL_FLASH_Unlock();
     __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_WRPERR | FLASH_FLAG_PGSERR);
@@ -129,9 +133,9 @@ uint8_t SelfProgram::writePage(uint32_t address, uint8_t *data, uint16_t len) {
         uint32_t batch = *reinterpret_cast<uint32_t*>(&data[i]);
         uint32_t current_flash_address = application_start + address + i;
         WatchdogReset();
-        if (err = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, current_flash_address, batch) != HAL_OK) {
+        if ((err = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, current_flash_address, batch)) != HAL_OK) {
             printf("Write failed(batch=%d)\n", batch_size);
-            printf("Address: %08X, Data: %08X\n", current_flash_address, batch);
+            printf("Address: %08lX, Data: %08lX\n", current_flash_address, batch);
             report_error(err);
             return 1;
         }
@@ -141,9 +145,9 @@ uint8_t SelfProgram::writePage(uint32_t address, uint8_t *data, uint16_t len) {
         uint8_t byte = data[i];
         uint32_t current_flash_address = application_start + address + i;
         WatchdogReset();
-        if (err = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, current_flash_address, byte) != HAL_OK) {
+        if ((err = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, current_flash_address, byte)) != HAL_OK) {
             printf("Write failed(byte)\n");
-            printf("Address: %08X, Data: %08X\n", current_flash_address, byte);
+            printf("Address: %08lX, Data: %02X\n", current_flash_address, byte);
             report_error(err);
             return 1;
         }

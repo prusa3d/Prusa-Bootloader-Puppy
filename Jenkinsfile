@@ -7,46 +7,52 @@ pipeline {
         stage("Prepare") {
             steps {
                 sh 'git submodule update --init'
+            }
+        }
 
-                script {
-                    def commit_nr = sh(script: 'git rev-list HEAD --count', returnStdout: true).trim()
-                    def prefix
-                    if (env.CHANGE_ID) {
-                        // This is a PR build
-                        prefix = "PR${env.CHANGE_ID}-"
-                    } else if (env.BRANCH_NAME == "master") {
-                        prefix = ""
-                    } else {
-                        // This is build of an ordinary branch (not a release branch)
-                        prefix = env.BRANCH_NAME.replaceAll("_", "-")
+        stage("Build") {
+            parallel {
+                stage("Dwarf") {
+                    steps {
+                        sh 'cmake --preset dwarf'
+                        sh 'cmake --build --preset dwarf'
                     }
-                    env.BL_VERSION = "${commit_nr}"
-                    env.BL_VERSION_PREFIX = prefix
                 }
-            }
-        }
 
-        stage("Build libopencm3") {
-            steps {
-                sh 'make -C libopencm3 lib/stm32/g0'
-            }
-        }
+                stage("Modular Bed") {
+                    steps {
+                        sh 'cmake --preset modularbed'
+                        sh 'cmake --build --preset modularbed'
+                    }
+                }
 
-        stage("Build Dwarf") {
-            steps {
-                sh "make dwarf"
-            }
-        }
+                stage("XBuddy Extension") {
+                    steps {
+                        sh 'cmake --preset xbuddy_extension'
+                        sh 'cmake --build --preset xbuddy_extension'
+                    }
+                }
 
-        stage("Build Modular Bed") {
-            steps {
-                sh "make modularbed"
-            }
-        }
+                stage("INDX Head") {
+                    steps {
+                        sh 'cmake --preset indx_head'
+                        sh 'cmake --build --preset indx_head'
+                    }
+                }
 
-        stage("Build XBuddy Extension") {
-            steps {
-                sh "make xbuddy_extension"
+                stage("Baseboard") {
+                    steps {
+                        sh 'cmake --preset baseboard'
+                        sh 'cmake --build --preset baseboard'
+                    }
+                }
+
+                stage("Smartled01") {
+                    steps {
+                        sh 'cmake --preset smartled01'
+                        sh 'cmake --build --preset smartled01'
+                    }
+                }
             }
         }
     }
@@ -54,7 +60,7 @@ pipeline {
     post {
         always {
             // archive build products
-            archiveArtifacts artifacts: 'bootloader-*', fingerprint: true
+            archiveArtifacts artifacts: 'build/*/bootloader-*', fingerprint: true
         }
         cleanup {
             deleteDir()
