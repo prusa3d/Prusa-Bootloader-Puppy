@@ -12,7 +12,6 @@ target_sources(bootloader PRIVATE
     stm32-ocm3/Rs485.cpp
     stm32-ocm3/security_features.cpp
     stm32-ocm3/SelfProgram.cpp
-    stm32-ocm3/uart.cpp
 )
 
 target_include_directories(bootloader PRIVATE

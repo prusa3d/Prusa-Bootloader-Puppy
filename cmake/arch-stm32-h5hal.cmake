@@ -15,7 +15,6 @@ target_sources(bootloader PRIVATE
     stm32-common/power_panic.cpp
     stm32-common/Reset.cpp
     stm32-common/Rs485.cpp
-    stm32-common/uart.cpp
 )
 
 set(HAL_SOURCES

@@ -18,7 +18,6 @@
 #include "bootloader.h"
 #include "SelfProgram.h"
 #include "fault_handlers.hpp"
-#include "uart.hpp"
 #include <stdio.h>
 
 
