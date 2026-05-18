@@ -4,12 +4,13 @@ project(prusa-bootloader-puppy LANGUAGES C CXX ASM)
 set(BOARD "" CACHE STRING "dwarf | modularbed | xbuddy_extension | indx_head")
 set(CURRENT_HW_REVISION    "0x10" CACHE STRING "HW revision byte, e.g. 0x10")
 set(COMPATIBLE_HW_REVISION "0x10" CACHE STRING "HW revision byte, e.g. 0x10")
-set(VERSION                "1"    CACHE STRING "Bootloader version (integer)")
-set(VERSION_PREFIX         ""     CACHE STRING "Bootloader version prefix string")
+
+file(STRINGS "${CMAKE_SOURCE_DIR}/version.txt" BL_VERSION)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/version.txt")
 
 math(EXPR HW_MAJOR "${CURRENT_HW_REVISION} / 16" OUTPUT_FORMAT DECIMAL)
 math(EXPR HW_MINOR "${CURRENT_HW_REVISION} % 16" OUTPUT_FORMAT DECIMAL)
-set(FILE_NAME "bootloader-${VERSION_PREFIX}v${VERSION}-${BOARD}-${HW_MAJOR}.${HW_MINOR}")
+set(FILE_NAME "bootloader-v${BL_VERSION}-${BOARD}-${HW_MAJOR}.${HW_MINOR}")
 
 add_executable(bootloader
     BaseProtocol.cpp
@@ -49,7 +50,7 @@ target_compile_definitions(bootloader PRIVATE
     FW_DESCRIPTOR_SIZE=128
     HARDWARE_REVISION=${CURRENT_HW_REVISION}
     HARDWARE_COMPATIBLE_REVISION=${COMPATIBLE_HW_REVISION}
-    BL_VERSION=${VERSION}
+    BL_VERSION=${BL_VERSION}
 )
 
 if(BOARD STREQUAL "dwarf")
