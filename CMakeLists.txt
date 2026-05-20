@@ -33,7 +33,7 @@ set_target_properties(bootloader PROPERTIES
 
 target_compile_options(bootloader PRIVATE
     -Wall -Wextra -Werror
-    -fpack-struct -fshort-enums
+    -fshort-enums
     -ggdb3 -Os
     -ffunction-sections -fdata-sections
     -fno-exceptions

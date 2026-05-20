@@ -56,7 +56,7 @@ struct Commands {
 	static const uint8_t RESERVED_44 = 0x44; ///< RESET_ADDRESS
 };
 
-struct VersionInfoInFlash {
+struct __attribute__((packed)) VersionInfoInFlash {
     uint8_t hw_compatible_version; uint8_t hw_revision; uint8_t hw_type; uint32_t bl_version;
 };
 
