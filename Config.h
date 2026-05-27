@@ -44,6 +44,9 @@
 #elif defined(BOARD_TYPE_prusa_indx_head)
 	const uint8_t INFO_HW_TYPE = 45;
     const uint16_t MAX_PACKET_LENGTH = 255;
+#elif defined(BOARD_TYPE_prusa_xl_can)
+	const uint8_t INFO_HW_TYPE = 46;
+    const uint16_t MAX_PACKET_LENGTH = 255;
 #elif defined(BOARD_TYPE_prusa_baseboard)
     // Actual INFO_HW_TYPE is determined at runtime based on resistors
     // connected to the GPIO pins of the baseboard. This will be

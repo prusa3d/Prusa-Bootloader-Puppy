@@ -21,7 +21,9 @@
 #include <cstdint>
 #include <cstring>
 
-#if defined(BOARD_TYPE_prusa_xbuddy_extension)
+// The XL-CAN board shares the xBuddy Extension's MCU and RS485 wiring
+// (USART3 on PB7/PB8, flow control on PB14) — only its bus identity differs.
+#if defined(BOARD_TYPE_prusa_xbuddy_extension) || defined(BOARD_TYPE_prusa_xl_can)
 #define D_RS485_FLOW_CONTROL_Pin LL_GPIO_PIN_14
 #define D_RS485_FLOW_CONTROL_GPIO_Port GPIOB
 #define USART_CHANNEL USART3
@@ -53,7 +55,7 @@ void BusInit() {
 #endif
 
 
-#if defined(BOARD_TYPE_prusa_xbuddy_extension)
+#if defined(BOARD_TYPE_prusa_xbuddy_extension) || defined(BOARD_TYPE_prusa_xl_can)
 #define GPIO_PORT GPIOB
 #define HAS_RX_TIMEOUT_INTERUPT() 1
     /**USART3 GPIO Configuration
