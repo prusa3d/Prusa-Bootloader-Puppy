@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(prusa-bootloader-puppy LANGUAGES C CXX ASM)
 
-set(BOARD "" CACHE STRING "dwarf | modularbed | xbuddy_extension | indx_head | baseboard | smartled01")
+set(BOARD "" CACHE STRING "dwarf | modularbed | xbuddy_extension | indx_head | xl_can | baseboard | smartled01")
 set(CURRENT_HW_REVISION    "0x10" CACHE STRING "HW revision byte, e.g. 0x10")
 set(COMPATIBLE_HW_REVISION "0x10" CACHE STRING "HW revision byte, e.g. 0x10")
 
@@ -33,7 +33,7 @@ set_target_properties(bootloader PROPERTIES
 
 target_compile_options(bootloader PRIVATE
     -Wall -Wextra -Werror
-    -fpack-struct -fshort-enums
+    -fshort-enums
     -ggdb3 -Os
     -ffunction-sections -fdata-sections
     -fno-exceptions
@@ -65,6 +65,9 @@ elseif(BOARD STREQUAL "xbuddy_extension")
 elseif(BOARD STREQUAL "indx_head")
     set(ARCH stm32-c0hal)
     target_compile_definitions(bootloader PRIVATE BOARD_TYPE_prusa_indx_head FIXED_ADDRESS=18)
+elseif(BOARD STREQUAL "xl_can")
+    set(ARCH stm32-h5hal)
+    target_compile_definitions(bootloader PRIVATE BOARD_TYPE_prusa_xl_can FIXED_ADDRESS=19 DISABLE_WATCHDOG)
 elseif(BOARD STREQUAL "baseboard")
     set(ARCH stm32-f4hal)
     target_compile_definitions(bootloader PRIVATE BOARD_TYPE_prusa_baseboard FIXED_ADDRESS=2 DISABLE_WATCHDOG)

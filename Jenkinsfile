@@ -40,6 +40,13 @@ pipeline {
                     }
                 }
 
+                stage("XL-CAN") {
+                    steps {
+                        sh 'cmake --preset xl_can'
+                        sh 'cmake --build --preset xl_can'
+                    }
+                }
+
                 stage("Baseboard") {
                     steps {
                         sh 'cmake --preset baseboard'
